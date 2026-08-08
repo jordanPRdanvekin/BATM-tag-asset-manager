@@ -7,10 +7,10 @@ import math
 import bpy
 from bpy.props import IntProperty, StringProperty
 
-from ..adapters.blender_assets import selected_asset_keys, selected_tag_frequency
+from ..adapters.blender_assets import selected_asset_keys, selected_assets, selected_tag_frequency
 from ..core.models import TagOperation
+from ..core.sanitizer import options_from_props, split_tag_input
 from ..core.session import SESSION
-from ..core.sanitizer import split_tag_input
 
 
 def _targets(context) -> list[str]:
@@ -18,13 +18,30 @@ def _targets(context) -> list[str]:
 
 
 def _recompile_review(context) -> None:
+    """Recompile with the current sanitize settings, preserving disabled states."""
+    SESSION.sanitize_options = options_from_props(context.window_manager.batm_runtime)
     if SESSION.phase == "REVIEW_READY":
-        disabled = {token for token, state in SESSION.desired.items() if not state.enabled}
-        SESSION.compile()
-        for token in disabled:
-            if token in SESSION.desired:
-                SESSION.desired[token].enabled = False
+        SESSION.recompile_preserving_disabled()
         context.window_manager.batm_runtime.status = "Review updated"
+
+
+def _runtime(context):
+    return context.window_manager.batm_runtime
+
+
+def _is_duplicate(operation: TagOperation) -> bool:
+    """True when an identical pending operation (same kind, targets, values) is queued."""
+    for existing in SESSION.operations:
+        if existing.kind != operation.kind:
+            continue
+        if set(existing.targets) != set(operation.targets):
+            continue
+        if set(existing.values) != set(operation.values):
+            continue
+        if existing.source_value != operation.source_value:
+            continue
+        return True
+    return False
 
 
 class BATM_OT_manual_add(bpy.types.Operator):
@@ -33,15 +50,17 @@ class BATM_OT_manual_add(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        props = context.window_manager.batm_runtime
+        props = _runtime(context)
         values = [value.strip() for value in split_tag_input(props.manual_add) if value.strip()]
         targets = _targets(context)
         if not values or not targets:
             self.report({"WARNING"}, "Select assets and enter one or more Tags")
             return {"CANCELLED"}
-        SESSION.operations.append(
-            TagOperation(kind="ADD", targets=targets, values=values, origin="MANUAL", explanation="Manual Add")
-        )
+        operation = TagOperation(kind="ADD", targets=targets, values=values, origin="MANUAL", explanation="Manual Add")
+        if _is_duplicate(operation):
+            props.status = f"Already queued ADD for {len(targets)} assets"
+            return {"FINISHED"}
+        SESSION.operations.append(operation)
         props.manual_add = ""
         props.status = f"Queued Add for {len(targets)} assets"
         _recompile_review(context)
@@ -78,7 +97,7 @@ class BATM_OT_manual_remove(bpy.types.Operator):
             TagOperation(kind="REMOVE", targets=targets, values=values, origin="MANUAL", explanation="Manual Remove")
         )
         SESSION.selected_tags.clear()
-        context.window_manager.batm_runtime.status = f"Queued Remove for {len(targets)} assets"
+        _runtime(context).status = f"Queued Remove for {len(targets)} assets"
         _recompile_review(context)
         return {"FINISHED"}
 
@@ -89,7 +108,7 @@ class BATM_OT_manual_replace(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        props = context.window_manager.batm_runtime
+        props = _runtime(context)
         targets = _targets(context)
         source = props.replace_source.strip()
         values = [value.strip() for value in split_tag_input(props.replace_destination) if value.strip()]
@@ -117,41 +136,17 @@ class BATM_OT_clear_pending(bpy.types.Operator):
     bl_idname = "batm.clear_pending"
     bl_label = "Clear Pending Operations"
 
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
     def execute(self, context):
         if SESSION.phase not in {"IDLE", "REVIEW_READY"}:
             return {"CANCELLED"}
         SESSION.operations.clear()
         SESSION.selected_tags.clear()
         if SESSION.phase == "REVIEW_READY":
-            SESSION.compile()
-        context.window_manager.batm_runtime.status = "Pending operations cleared"
-        return {"FINISHED"}
-
-
-class BATM_OT_manual_select_by_tag(bpy.types.Operator):
-    """Select the asset(s) that own a given tag in the Asset Browser."""
-
-    bl_idname = "batm.manual_select_by_tag"
-    bl_label = "Select Assets with Tag"
-    tag_name: StringProperty()
-
-    def execute(self, context):
-        from ..adapters.blender_assets import selected_assets
-
-        try:
-            assets = selected_assets(context)
-            # Try the public selection API; some Blender builds expose
-            # selected_assets.set() on the file browser params.
-            params = getattr(getattr(context, "space_data", None), "params", None)
-            if params is not None and hasattr(params, "selected_assets"):
-                selection = getattr(params, "selected_assets", None)
-                for asset in assets:
-                    match = any(tag.name.casefold() == self.tag_name.casefold() for tag in asset.metadata.tags)
-                    setattr(asset, "selected", match)
-            context.window_manager.batm_runtime.status = f"Tag '{self.tag_name}' used to filter selection"
-        except Exception:
-            # Selection by tag is best-effort; the index still reflects tags.
-            pass
+            SESSION.recompile_preserving_disabled()
+        _runtime(context).status = "Pending operations cleared"
         return {"FINISHED"}
 
 
@@ -163,30 +158,21 @@ class BATM_OT_manual_clone_selected(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        props = context.window_manager.batm_runtime
-        from ..adapters.blender_assets import selected_asset_keys
-
+        props = _runtime(context)
         keys = selected_asset_keys(context)
         if len(keys) < 2:
             self.report({"WARNING"}, "Select at least two assets to clone tags")
             return {"CANCELLED"}
         source = props.clone_source.strip()
-        if not source:
-            # Default: first selected asset is the source.
-            source_token = keys[0].token
-        else:
-            source_token = source
-        if source_token not in {k.token for k in keys}:
+        source_token = source if source else keys[0].token
+        if source_token not in {key.token for key in keys}:
             self.report({"WARNING"}, "Source asset is not in the current selection")
             return {"CANCELLED"}
-        # Build tag index for the source asset from its snapshot if available,
-        # otherwise from the live Asset Representation metadata.
-        from ..adapters.blender_assets import selected_assets
-
+        # Zip keep the live keys and AssetRepresentations in the same order so
+        # the source token always resolves to the matching live asset.
         source_tags: list[str] = []
-        for asset in selected_assets(context):
-            key = _target_key(asset, context)
-            if key == source_token:
+        for key, asset in zip(keys, selected_assets(context)):
+            if key.token == source_token:
                 source_tags = [tag.name for tag in asset.metadata.tags]
                 break
         if not source_tags:
@@ -195,7 +181,7 @@ class BATM_OT_manual_clone_selected(bpy.types.Operator):
         if not source_tags:
             self.report({"WARNING"}, "Source asset has no tags to clone")
             return {"CANCELLED"}
-        targets = [k.token for k in keys if k.token != source_token]
+        targets = [key.token for key in keys if key.token != source_token]
         SESSION.operations.append(
             TagOperation(
                 kind="ADD",
@@ -210,34 +196,20 @@ class BATM_OT_manual_clone_selected(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def _target_key(asset, context) -> str:
-    from ..core.models import AssetKey
-
-    fallback = getattr(context, "asset_library_reference", "") or ""
-    owner = getattr(asset, "owner_asset_library", None)
-    lib = getattr(owner, "name", "") or fallback
-    path = str(getattr(asset, "full_library_path", "") or "")
-    return AssetKey(
-        library_reference=str(lib),
-        blend_path=path,
-        id_type=str(getattr(asset, "id_type", "")).upper(),
-        datablock_name=str(asset.name),
-    ).token
-
-
 class BATM_OT_manual_tag_page(bpy.types.Operator):
-    """Change the pagination offset for the Tag list."""
+    """Change the pagination offset of the unified Tag list."""
 
     bl_idname = "batm.manual_tag_page"
     bl_label = "Tag Page"
     delta: IntProperty()
 
     def execute(self, context):
-        props = context.window_manager.batm_runtime
-        _asset_total, frequency = selected_tag_frequency(context)
+        props = _runtime(context)
         page_size = max(1, props.manual_page_size)
+        _asset_total, frequency = selected_tag_frequency(context)
         page_count = max(1, math.ceil(max(1, len(frequency)) / page_size))
-        props.manual_tag_page = max(0, min(props.manual_tag_page + self.delta, page_count - 1))
+        current = props.manual_tag_page
+        props.manual_tag_page = max(0, min(current + self.delta, page_count - 1))
         return {"FINISHED"}
 
 
@@ -247,7 +219,6 @@ CLASSES = (
     BATM_OT_manual_remove,
     BATM_OT_manual_replace,
     BATM_OT_clear_pending,
-    BATM_OT_manual_select_by_tag,
     BATM_OT_manual_clone_selected,
     BATM_OT_manual_tag_page,
 )

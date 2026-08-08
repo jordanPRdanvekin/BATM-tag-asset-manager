@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import bpy
 
@@ -66,7 +67,7 @@ class InventoryService:
             return
         if not force and roots == self.roots_signature and self.libraries:
             return
-        run_id = f"inventory-{int(time.time())}"
+        run_id = f"inventory-{uuid4().hex[:12]}"
         self.prepared = prepare_request(run_id, 0, {"mode": "INVENTORY", "roots": list(roots)})
         self.process = __import__("subprocess").Popen(
             command_for(self.prepared),

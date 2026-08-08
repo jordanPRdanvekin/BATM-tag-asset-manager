@@ -13,7 +13,7 @@ import bpy
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from ..adapters.blender_assets import current_tags, find_local_id, set_local_tags
+from ..adapters.blender_assets import batm_preferences, current_tags, find_local_id, set_local_tags
 from ..adapters.storage import atomic_json_write
 from ..adapters.worker_ipc import prepare_request
 from ..core.models import AssetKey
@@ -182,6 +182,9 @@ class BATM_OT_restore_backup(bpy.types.Operator):
                                 for item in items
                             ],
                         },
+                        timeout_seconds=float(
+                            getattr(batm_preferences(context), "worker_timeout_seconds", 2000)
+                        ),
                     )
                 )
             if not prepared:
@@ -207,6 +210,7 @@ class BATM_OT_restore_backup(bpy.types.Operator):
         scheduler.poll()
         props = context.window_manager.batm_runtime
         props.progress = scheduler.confirmed_assets / max(1, scheduler.total_assets)
+        props.eta_reliable = True
         props.elapsed_seconds = max(0.0, time.monotonic() - self._started)
         props.eta_seconds = (
             props.elapsed_seconds * (1.0 - props.progress) / props.progress if props.progress > 0.0 else 0.0

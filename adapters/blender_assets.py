@@ -11,6 +11,7 @@ import bpy
 
 from ..core.models import AssetKey, AssetSnapshot, DesiredAssetState
 from ..engine.autotag import enrich_basic_facts
+from ..engine.extractors import extract_all
 from ..engine.fingerprint import fingerprint_file
 
 
@@ -126,6 +127,37 @@ def _resolved_path(asset: Any) -> str:
     return str(Path(bpy.path.abspath(path)).resolve()) if path else ""
 
 
+def batm_preferences(context: Any) -> Any | None:
+    """Centralized AddonPreferences lookup (single source of truth)."""
+    try:
+        for key, addon in context.preferences.addons.items():
+            if key.endswith("batch_asset_tag_manager") or key.endswith("BATM_4.0.0"):
+                return addon.preferences
+    except Exception:
+        return None
+    return None
+
+
+def refresh_asset_browser(context: Any) -> bool:
+    """Refresh every open Asset Browser window; True if at least one refreshed."""
+    try:
+        for window in context.window_manager.windows:
+            screen = window.screen
+            for area in screen.areas:
+                if area.type != "FILE_BROWSER" or getattr(area.spaces.active, "browse_mode", "") != "ASSETS":
+                    continue
+                region = next((item for item in area.regions if item.type == "WINDOW"), None)
+                try:
+                    with context.temp_override(window=window, screen=screen, area=area, region=region):
+                        result = bpy.ops.asset.library_refresh()
+                        return "FINISHED" in result
+                except RuntimeError:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
 def _is_file_writable(path: str) -> bool:
     if not path or not Path(path).is_file():
         return False
@@ -137,23 +169,22 @@ def _is_file_writable(path: str) -> bool:
 
 
 def _local_facts(datablock: Any) -> dict[str, Any]:
-    facts: dict[str, Any] = {}
+    """Deep Current File facts using the same unified extractors as the worker.
+
+    This gives Current File assets the same canonical contract (plural
+    aggregates + singular aliases) that external files receive from the
+    background worker, so AutoTag rules behave identically everywhere.
+    """
     if datablock is None:
-        return facts
-    identifier = str(datablock.bl_rna.identifier).upper()
-    facts["id_type"] = identifier
-    if identifier == "OBJECT":
-        facts["object_type"] = str(datablock.type)
-        if getattr(datablock, "data", None) is not None:
-            facts["data_type"] = str(datablock.data.bl_rna.identifier).upper()
-    elif identifier == "COLLECTION":
-        objects = list(datablock.all_objects)
-        facts["collection_object_count"] = len(objects)
-        facts["collection_types"] = sorted({str(obj.type) for obj in objects})
-    return facts
+        return {}
+    return extract_all(datablock)
 
 
-def snapshot_selection(context: Any, asset_type_filter: str = "ALL") -> list[AssetSnapshot]:
+def snapshot_selection(
+    context: Any,
+    asset_type_filter: str = "ALL",
+    defer_fingerprints: bool = False,
+) -> list[AssetSnapshot]:
     fallback_library = _context_library_reference(context)
     fingerprint_cache: dict[str, dict[str, Any]] = {}
     snapshots: list[AssetSnapshot] = []
@@ -183,7 +214,12 @@ def snapshot_selection(context: Any, asset_type_filter: str = "ALL") -> list[Ass
             reason = "Current file must be saved with no pending changes"
         elif path != current_path and not _is_file_writable(path):
             reason = "Asset .blend file is not writable"
-        if path and Path(path).is_file() and path not in fingerprint_cache:
+        if (
+            path
+            and Path(path).is_file()
+            and not defer_fingerprints
+            and path not in fingerprint_cache
+        ):
             try:
                 fingerprint_cache[path] = fingerprint_file(path)
             except OSError:

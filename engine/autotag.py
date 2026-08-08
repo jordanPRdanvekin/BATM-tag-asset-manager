@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from collections import Counter
 
 from ..core.models import AssetSnapshot, Rule, TagOperation
+from .knowledge import knowledge_tags
 
 # Common suffixes/prefixes stripped from library folder names to produce a
 # readable tag (e.g. "Comedy_island_library" -> "Comedy Island").
@@ -104,7 +104,7 @@ def _base_tags(snapshot: AssetSnapshot) -> list[TagOperation]:
     ops: list[TagOperation] = []
     target = snapshot.key.token
     library_tag = snapshot.facts.get("library_tag", "")
-    if library_tag and snapshot.facts.get("include_library_tag", True):
+    if library_tag:
         ops.append(
             TagOperation(
                 kind="ADD",
@@ -203,14 +203,26 @@ def _base_tags(snapshot: AssetSnapshot) -> list[TagOperation]:
 
 
 def build_autotag_operations(
-    snapshots: list[AssetSnapshot], rules: list[Rule]
+    snapshots: list[AssetSnapshot], rules: list[Rule], knowledge: list[dict] | None = None
 ) -> list[TagOperation]:
     operations: list[TagOperation] = []
+    groups = knowledge or []
     for snapshot in snapshots:
         enrich_deep_facts(snapshot)
         if not snapshot.writable:
             continue
         operations.extend(_base_tags(snapshot))
+        for tag, matched_word in knowledge_tags(snapshot, groups):
+            operations.append(
+                TagOperation(
+                    kind="ADD",
+                    targets=[snapshot.key.token],
+                    values=[tag],
+                    origin="AUTO",
+                    priority=12,
+                    explanation=f"Knowledge: {tag} (matched '{matched_word}')",
+                )
+            )
         for rule in sorted((item for item in rules if item.enabled), key=lambda item: item.priority):
             if rule_matches(snapshot, rule):
                 operations.append(
@@ -224,20 +236,3 @@ def build_autotag_operations(
                     )
                 )
     return operations
-
-
-def build_tag_index(snapshots: list[AssetSnapshot]) -> dict[str, int]:
-    """Tag frequency index ``casefold -> count`` over the given snapshots.
-
-    Used by the Manual Tag Editor and Diagnostics; never queries Blender.
-    """
-    counter: Counter[str] = Counter()
-    for snapshot in snapshots:
-        seen: set[str] = set()
-        for tag in snapshot.tags:
-            key = tag.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            counter[key] += 1
-    return dict(sorted(counter.items()))

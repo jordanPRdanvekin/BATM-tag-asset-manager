@@ -67,7 +67,19 @@ def verify_backup(path: str | Path) -> dict[str, Any]:
 
 
 def recoverable_backups() -> list[Path]:
-    return sorted(ensure_dirs()["backups"].glob("batm_backup_*.json"))
+    backups = list(ensure_dirs()["backups"].glob("batm_backup_*.json"))
+
+    def sort_key(path: Path):
+        payload = read_json(path, {})
+        stamp = payload.get("created_at", "") if isinstance(payload, dict) else ""
+        if stamp:
+            try:
+                return datetime.fromisoformat(stamp).timestamp()
+            except ValueError:
+                pass
+        return path.stat().st_mtime
+
+    return sorted(backups, key=sort_key)
 
 
 def update_backup_states(path: str | Path, blend_paths: set[str], status: str) -> None:
@@ -84,3 +96,27 @@ def update_backup_states(path: str | Path, blend_paths: set[str], status: str) -
 
 def delete_backup(path: str | Path) -> None:
     Path(path).unlink(missing_ok=True)
+
+
+def prune_backups(retention_days: int = 30) -> list[Path]:
+    """Delete backups older than retention_days, always keeping the newest."""
+    backups = recoverable_backups()
+    if len(backups) <= 1:
+        return []
+    cutoff = datetime.now(timezone.utc).timestamp() - retention_days * 86400
+    removed: list[Path] = []
+    for path in backups[:-1]:
+        payload = read_json(path, {})
+        stamp = payload.get("created_at", "") if isinstance(payload, dict) else ""
+        age = 0.0
+        if stamp:
+            try:
+                age = datetime.fromisoformat(stamp).timestamp()
+            except ValueError:
+                age = path.stat().st_mtime
+        else:
+            age = path.stat().st_mtime
+        if age < cutoff:
+            delete_backup(path)
+            removed.append(path)
+    return removed

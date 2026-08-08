@@ -17,7 +17,9 @@ def worker_script_path() -> Path:
     return Path(__file__).resolve().parents[1] / "worker" / "batm_worker.py"
 
 
-def prepare_request(run_id: str, index: int, payload: dict[str, Any]) -> dict[str, Any]:
+def prepare_request(
+    run_id: str, index: int, payload: dict[str, Any], timeout_seconds: float | None = None
+) -> dict[str, Any]:
     run_dir = ensure_dirs()["runs"] / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{index:05d}"
@@ -33,14 +35,19 @@ def prepare_request(run_id: str, index: int, payload: dict[str, Any]) -> dict[st
         "cancel_path": str(cancel_path),
         **payload,
     }
+    if timeout_seconds is not None:
+        request["timeout_seconds"] = float(timeout_seconds)
     atomic_json_write(request_path, request)
-    return {
+    prepared = {
         "request": request,
         "request_path": str(request_path),
         "status_path": str(status_path),
         "result_path": str(result_path),
         "cancel_path": str(cancel_path),
     }
+    if timeout_seconds is not None:
+        prepared["timeout_seconds"] = float(timeout_seconds)
+    return prepared
 
 
 def command_for(prepared: dict[str, Any]) -> list[str]:

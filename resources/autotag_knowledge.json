@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "$comment": "Bundled BATM knowledge dictionary. Each group maps recognized words to a canonical category Tag. Add or remove groups freely; empty words are ignored.",
+  "groups": [
+    {
+      "tag": "Wood",
+      "words": ["oak", "maple", "pine", "walnut", "birch", "spruce", "cedar", "beech", "plank", "timber", "plywood", "teak"]
+    },
+    {
+      "tag": "Metal",
+      "words": ["steel", "iron", "aluminum", "aluminium", "brass", "bronze", "copper", "chrome", "stainless", "titanium", "nickel", "zinc"]
+    },
+    {
+      "tag": "Glass",
+      "words": ["glass", "pane", "prism", "crystal", "vitrified", "portal", "window"]
+    },
+    {
+      "tag": "Stone",
+      "words": ["granite", "marble", "slate", "limestone", "brick", "concrete", "pebble", "boulder", "cobblestone", "sandstone"]
+    },
+    {
+      "tag": "Fabric",
+      "words": ["fabric", "cloth", "linen", "silk", "velvet", "cotton", "wool", "canvas", "felt", "denim"]
+    },
+    {
+      "tag": "Leather",
+      "words": ["leather", "suede", "hide", "patent"]
+    },
+    {
+      "tag": "Plastic",
+      "words": ["plastic", "acrylic", "polycarbonate", "nylon", "pvc", "resin"]
+    },
+    {
+      "tag": "Rubber",
+      "words": ["rubber", "silicone", "neoprene", "latex"]
+    },
+    {
+      "tag": "Ceramic",
+      "words": ["ceramic", "porcelain", "terracotta", "tile", "glaze"]
+    },
+    {
+      "tag": "Paper",
+      "words": ["paper", "cardboard", "kraft", "newspaper", "magazine"]
+    },
+    {
+      "tag": "Foliage",
+      "words": ["leaf", "leafy", "tree", "bush", "shrub", "fern", "grass", "moss", "vine", "ivy", "canopy", "flower", "petal"]
+    },
+    {
+      "tag": "Water",
+      "words": ["water", "ocean", "sea", "river", "lake", "puddle", "wave", "liquid", "fluid", "wet"]
+    },
+    {
+      "tag": "Lighting",
+      "words": ["lamp", "light", "bulb", "lantern", "chandelier", "sconce", "torch", "spotlight", "neon", "emissive"]
+    },
+    {
+      "tag": "Clutter",
+      "words": ["prop", "clutter", "junk", "debris", "scrap", "litter", "misc"]
+    }
+  ]
+}

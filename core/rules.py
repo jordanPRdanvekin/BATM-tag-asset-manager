@@ -24,6 +24,10 @@ ALLOWED_FIELDS = {
     "material_names",
     "rig_types",
     "geometry_node_names",
+    "bone_names",
+    "constraint_types",
+    "parent_names",
+    "hierarchy_depth",
 }
 ALLOWED_MODES = {"ANY", "ALL", "EXACT"}
 

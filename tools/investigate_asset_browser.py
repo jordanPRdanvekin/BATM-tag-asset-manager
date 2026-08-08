@@ -1,11 +1,12 @@
-"""BATM v3.x LTS — Fase 0: Investigación y validación del Asset Browser.
+"""BATM v3.x LTS — Phase 0: Asset Browser API investigation and validation.
 
-Ejecutar en la consola de Blender 5.2 con el Asset Browser abierto y una
-biblioteca seleccionada:
+Run inside Blender 5.2's Python console with the Asset Browser open and a
+library selected:
 
     exec(open(r"C:\\...\\tools\\investigate_asset_browser.py").read())
 
-Este script NO modifica nada. Solo imprime información para validar la API.
+This script does NOT modify anything. It only prints information to validate
+the Asset Browser API surface used by BATM.
 """
 
 from __future__ import annotations
@@ -29,11 +30,11 @@ def _safe_getattr(obj, name, default=None):
 
 def investigate() -> None:
     print("=" * 70)
-    print("BATM Fase 0 — Investigación del Asset Browser")
+    print("BATM Phase 0 — Asset Browser Investigation")
     print("=" * 70)
 
-    # 1. Contexto del Asset Browser
-    print("\n--- 1. Contexto del Asset Browser ---")
+    # 1. Asset Browser editor context
+    print("\n--- 1. Asset Browser context ---")
     for area in bpy.context.screen.areas:
         if area.type != "FILE_BROWSER":
             continue
@@ -49,8 +50,7 @@ def investigate() -> None:
             print(f"  params.filter_search: {_safe_repr(_safe_getattr(params, 'filter_search'))}")
             print(f"  params.filter_id: {_safe_repr(_safe_getattr(params, 'filter_id'))}")
             print(f"  params.filter_asset_library: {_safe_repr(_safe_getattr(params, 'filter_asset_library'))}")
-            # Enumerar atributos relevantes
-            print("  Atributos de params (filtrados):")
+            print("  Relevant params attributes:")
             for attr in dir(params):
                 if any(key in attr.lower() for key in ("asset", "catalog", "filter", "library")):
                     try:
@@ -59,7 +59,7 @@ def investigate() -> None:
                     except Exception as exc:
                         print(f"    {attr} = <error: {exc}>")
 
-    # 2. Contexto del Asset Browser (context.asset_library_reference)
+    # 2. context.asset_library_reference
     print("\n--- 2. context.asset_library_reference ---")
     ref = _safe_getattr(bpy.context, "asset_library_reference")
     print(f"  context.asset_library_reference: {_safe_repr(ref)}")
@@ -73,11 +73,11 @@ def investigate() -> None:
                 except Exception as exc:
                     print(f"    ref.{attr} = <error: {exc}>")
 
-    # 3. Bibliotecas configuradas en preferencias
-    print("\n--- 3. Bibliotecas en preferencias ---")
+    # 3. Registered libraries
+    print("\n--- 3. Libraries in preferences ---")
     try:
         libraries = bpy.context.preferences.filepaths.asset_libraries
-        print(f"  Número de bibliotecas: {len(libraries)}")
+        print(f"  Library count: {len(libraries)}")
         for i, lib in enumerate(libraries):
             print(f"  [{i}] name={_safe_repr(lib.name)} path={_safe_repr(lib.path)}")
             print(f"      type={type(lib)}")
@@ -88,13 +88,13 @@ def investigate() -> None:
                     except Exception as exc:
                         print(f"      lib.{attr} = <error: {exc}>")
     except Exception as exc:
-        print(f"  Error accediendo a asset_libraries: {exc}")
+        print(f"  Error accessing asset_libraries: {exc}")
 
-    # 4. Assets seleccionados
-    print("\n--- 4. Assets seleccionados ---")
+    # 4. Selected assets
+    print("\n--- 4. Selected assets ---")
     try:
         selected = list(bpy.context.selected_assets)
-        print(f"  Número de assets seleccionados: {len(selected)}")
+        print(f"  Selected asset count: {len(selected)}")
         for asset in selected[:5]:
             print(f"  Asset: name={_safe_repr(asset.name)} id_type={_safe_repr(asset.id_type)}")
             print(f"    full_library_path={_safe_repr(asset.full_library_path)}")
@@ -117,10 +117,10 @@ def investigate() -> None:
                 print(f"    metadata.catalog_id={_safe_repr(_safe_getattr(metadata, 'catalog_id'))}")
                 print(f"    metadata.tags={_safe_repr([t.name for t in _safe_getattr(metadata, 'tags', [])])}")
     except Exception as exc:
-        print(f"  Error accediendo a selected_assets: {exc}")
+        print(f"  Error accessing selected_assets: {exc}")
 
-    # 5. Catálogo activo
-    print("\n--- 5. Catálogo activo ---")
+    # 5. Active catalog
+    print("\n--- 5. Active catalog ---")
     try:
         catalog = _safe_getattr(bpy.context, "asset_catalog")
         print(f"  context.asset_catalog: {_safe_repr(catalog)}")
@@ -133,26 +133,24 @@ def investigate() -> None:
                     except Exception as exc:
                         print(f"    catalog.{attr} = <error: {exc}>")
     except Exception as exc:
-        print(f"  Error accediendo a asset_catalog: {exc}")
+        print(f"  Error accessing asset_catalog: {exc}")
 
-    # 6. Inventario: contar assets en la biblioteca activa
-    print("\n--- 6. Inventario de la biblioteca activa ---")
+    # 6. Inventory: count assets in the active library
+    print("\n--- 6. Active library inventory ---")
     try:
-        # Resolver la biblioteca activa
         active_ref = _safe_getattr(bpy.context, "asset_library_reference")
         active_name = None
         if active_ref is not None:
             active_name = _safe_getattr(active_ref, "name")
-        print(f"  Biblioteca activa (ref.name): {active_name}")
+        print(f"  Active library (ref.name): {active_name}")
 
-        # Contar assets en cada biblioteca configurada
         for lib in bpy.context.preferences.filepaths.asset_libraries:
             import os
             from pathlib import Path
 
             root = Path(bpy.path.abspath(lib.path))
             if not root.exists():
-                print(f"  {lib.name}: ruta no existe ({root})")
+                print(f"  {lib.name}: path does not exist ({root})")
                 continue
             blend_files = list(root.rglob("*.blend"))
             total_assets = 0
@@ -166,13 +164,13 @@ def investigate() -> None:
                             if isinstance(value, list):
                                 total_assets += len(value)
                 except Exception as exc:
-                    print(f"    Error en {blend.name}: {exc}")
-            print(f"  {lib.name}: {len(blend_files)} archivos .blend, {total_assets} assets totales")
+                    print(f"    Error in {blend.name}: {exc}")
+            print(f"  {lib.name}: {len(blend_files)} .blend files, {total_assets} total assets")
     except Exception as exc:
-        print(f"  Error en inventario: {exc}")
+        print(f"  Error in inventory: {exc}")
 
     print("\n" + "=" * 70)
-    print("Fin de la investigación. Copia esta salida y pégala en el chat.")
+    print("Investigation complete. Copy this output and paste it into the chat.")
     print("=" * 70)
 
 

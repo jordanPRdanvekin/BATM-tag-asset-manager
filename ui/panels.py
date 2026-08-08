@@ -7,18 +7,16 @@ from pathlib import Path
 
 import bpy
 
-from ..adapters.blender_assets import active_library_label, selected_assets, selected_tag_frequency
-from ..core.session import SESSION
+from ..adapters.blender_assets import (
+    active_library_label,
+    batm_preferences,
+    selected_assets,
+    selected_tag_frequency,
+)
+from ..core.session import SESSION, filtered_review_states
 from ..engine.backup import recoverable_backups
 from ..engine.inventory import INVENTORY
 from ..engine.diagnostics import summarize
-
-
-def _preferences(context):
-    for key, addon in context.preferences.addons.items():
-        if key.endswith("batch_asset_tag_manager") or key.endswith("BATM_4.0.0"):
-            return addon.preferences
-    return None
 
 
 def _current_catalog_label(context) -> str:
@@ -90,8 +88,11 @@ def _draw_progress(layout, context) -> None:
     if props.progress_detail:
         box.label(text=props.progress_detail)
     elapsed = int(props.elapsed_seconds)
-    eta = int(props.eta_seconds)
-    box.label(text=f"Elapsed {elapsed // 60:02d}:{elapsed % 60:02d}  ETA {eta // 60:02d}:{eta % 60:02d}")
+    if props.eta_reliable and props.eta_seconds > 0.0:
+        eta = int(props.eta_seconds)
+        box.label(text=f"Elapsed {elapsed // 60:02d}:{elapsed % 60:02d}  ETA {eta // 60:02d}:{eta % 60:02d}")
+    else:
+        box.label(text=f"Elapsed {elapsed // 60:02d}:{elapsed % 60:02d}  ETA —")
     if SESSION.phase == "EXECUTING":
         box.operator("batm.cancel_execution", icon="CANCEL")
 
@@ -114,102 +115,47 @@ def _draw_manual(layout, context) -> None:
     box = layout.box()
     box.label(text="Manual Tag Editor", icon="ASSET_MANAGER")
 
-    # ---- Tab 1: Add / Remove ----
-    if _collapsible_header(box, props, "manual_tab_edit", "Add / Remove"):
+    total, frequency = selected_tag_frequency(context)
+    box.prop(props, "tag_search", text="", icon="VIEWZOOM")
+    search = props.tag_search.casefold().strip()
+    filtered = [item for item in frequency if not search or search in item[0].casefold()]
+    box.label(text=f"Tags ({len(filtered)} of {len(frequency)} total)", icon="OUTLINER_OB_GROUP_INSTANCE")
+    page_size = max(1, props.manual_page_size)
+    page_count = max(1, math.ceil(max(1, len(filtered)) / page_size))
+    page = min(props.manual_tag_page, page_count - 1)
+    start = page * page_size
+    for name, count in filtered[start : start + page_size]:
+        selected = name.casefold() in SESSION.selected_tags
         row = box.row(align=True)
-        row.prop(props, "manual_add", text="")
-        row.operator("batm.manual_add", text="Add", icon="ADD")
-        row = box.row(align=True)
-        row.operator("batm.manual_remove", text="Remove Selected", icon="REMOVE")
+        toggle = row.operator(
+            "batm.toggle_tag_selection",
+            text="",
+            icon="CHECKBOX_HLT" if selected else "CHECKBOX_DEHLT",
+            emboss=False,
+        )
+        toggle.tag_name = name
+        row.label(text=name)
+        row.label(text=f"{count}/{total}")
+    nav = box.row(align=True)
+    nav.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").delta = -1
+    nav.label(text=f"Page {page + 1} / {page_count} — {len(filtered)} Tags")
+    nav.operator("batm.manual_tag_page", text="", icon="TRIA_RIGHT").delta = 1
 
-    # ---- Tab 2: Actions ----
-    if _collapsible_header(box, props, "manual_tab_actions", "Actions"):
-        row = box.row(align=True)
-        row.operator("batm.clear_pending", text="Clear Queue", icon="TRASH")
-        box.separator()
-        box.prop(props, "clone_source", text="Clone From")
-        box.operator("batm.manual_clone_selected", text="Clone Selected", icon="DUPLICATE")
-        box.label(text=f"Pending Operations: {len(SESSION.operations)}")
-
-    # ---- Tab 3: Search / Replace ----
-    if _collapsible_header(box, props, "manual_tab_search", "Search / Replace"):
-        total, frequency = selected_tag_frequency(context)
-        box.prop(props, "tag_search", text="", icon="VIEWZOOM")
-        search = props.tag_search.casefold().strip()
-        page_size = max(1, props.manual_page_size)
-        filtered = [item for item in frequency if not search or search in item[0].casefold()]
-        page_count = max(1, math.ceil(max(1, len(filtered)) / page_size))
-        props.manual_tag_page = min(props.manual_tag_page, page_count - 1)
-        start = props.manual_tag_page * page_size
-        for name, count in filtered[start : start + page_size]:
-            selected = name.casefold() in SESSION.selected_tags
-            row = box.row(align=True)
-            toggle = row.operator(
-                "batm.toggle_tag_selection",
-                text="",
-                icon="CHECKBOX_HLT" if selected else "CHECKBOX_DEHLT",
-                emboss=False,
-            )
-            toggle.tag_name = name
-            row.label(text=name)
-            row.label(text=f"{count}/{total}")
-            select = row.operator("batm.manual_select_by_tag", text="", icon="RESTRICT_SELECT_OFF", emboss=False)
-            select.tag_name = name
-        nav = box.row(align=True)
-        nav.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").delta = -1
-        nav.label(text=f"Page {props.manual_tag_page + 1} / {page_count} — {len(filtered)} Tags")
-        nav.operator("batm.manual_tag_page", text="", icon="TRIA_RIGHT").delta = 1
-        box.separator()
-        box.label(text="Replace / Merge", icon="FILE_REFRESH")
-        box.prop(props, "replace_source")
-        box.prop(props, "replace_destination")
-        box.operator("batm.manual_replace", text="Queue Replace / Merge", icon="FILE_REFRESH")
-
-    # ---- Tab 4: Tags (Global / Individual) ----
-    if _collapsible_header(box, props, "manual_tab_tags", "Tags"):
-        total, frequency = selected_tag_frequency(context)
-        box.label(text=f"Common Tags ({total} assets selected)", icon="OUTLINER_OB_GROUP_INSTANCE")
-        common = [item for item in frequency if item[1] == total]
-        search = props.tag_search.casefold().strip()
-        for name, count in common:
-            if search and search not in name.casefold():
-                continue
-            row = box.row(align=True)
-            toggle = row.operator(
-                "batm.toggle_tag_selection",
-                text="",
-                icon="CHECKBOX_HLT" if name.casefold() in SESSION.selected_tags else "CHECKBOX_DEHLT",
-                emboss=False,
-            )
-            toggle.tag_name = name
-            row.label(text=name)
-            row.label(text=f"{count}/{total}")
-        box.separator()
-        box.label(text="Partial / Individual Tags", icon="VIEWZOOM")
-        partial = [item for item in frequency if item[1] < total]
-        page_size = max(1, props.manual_page_size)
-        filtered_partial = [item for item in partial if not search or search in item[0].casefold()]
-        page_count = max(1, math.ceil(max(1, len(filtered_partial)) / page_size))
-        props.manual_tag_page = min(props.manual_tag_page, page_count - 1)
-        start = props.manual_tag_page * page_size
-        for name, count in filtered_partial[start : start + page_size]:
-            selected = name.casefold() in SESSION.selected_tags
-            row = box.row(align=True)
-            toggle = row.operator(
-                "batm.toggle_tag_selection",
-                text="",
-                icon="CHECKBOX_HLT" if selected else "CHECKBOX_DEHLT",
-                emboss=False,
-            )
-            toggle.tag_name = name
-            row.label(text=name)
-            row.label(text=f"{count}/{total}")
-            select = row.operator("batm.manual_select_by_tag", text="", icon="RESTRICT_SELECT_OFF", emboss=False)
-            select.tag_name = name
-        nav = box.row(align=True)
-        nav.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").delta = -1
-        nav.label(text=f"Page {props.manual_tag_page + 1} / {page_count} — {len(filtered_partial)} Tags")
-        nav.operator("batm.manual_tag_page", text="", icon="TRIA_RIGHT").delta = 1
+    box.separator()
+    row = box.row(align=True)
+    row.prop(props, "manual_add", text="New Tags")
+    row.operator("batm.manual_add", text="Add", icon="ADD")
+    box.operator("batm.manual_remove", text="Remove Selected", icon="REMOVE")
+    box.separator()
+    box.label(text="Replace / Merge", icon="FILE_REFRESH")
+    box.prop(props, "replace_source")
+    box.prop(props, "replace_destination")
+    box.operator("batm.manual_replace", text="Queue Replace / Merge", icon="FILE_REFRESH")
+    box.separator()
+    box.operator("batm.manual_clone_selected", text="Clone Selected", icon="DUPLICATE")
+    box.prop(props, "clone_source")
+    box.label(text=f"Pending Operations: {len(SESSION.operations)}")
+    box.operator("batm.clear_pending", text="Clear Pending Queue", icon="TRASH")
 
 
 def _draw_rules(layout, context) -> None:
@@ -278,32 +224,33 @@ def _draw_sanitize(layout, context) -> None:
     box.prop(props, "sanitize_blacklist", text="Blacklist (comma separated)")
 
 
-def _filtered_review(context):
-    search = context.window_manager.batm_runtime.review_search.casefold().strip()
-    states = sorted(SESSION.desired.values(), key=lambda item: (item.key.datablock_name.casefold(), item.key.id_type))
-    if not search:
-        return states
-    return [
-        state
-        for state in states
-        if search in state.key.datablock_name.casefold()
-        or search in state.key.id_type.casefold()
-        or search in state.key.blend_path.casefold()
-        or any(search in tag.casefold() for tag in state.after)
-    ]
-
-
 def _draw_review(layout, context) -> None:
     props = context.window_manager.batm_runtime
     box = layout.box()
     box.label(text="Review", icon="PREVIEW_RANGE")
-    box.prop(props, "review_search", text="", icon="VIEWZOOM")
-    states = _filtered_review(context)
-    prefs = _preferences(context)
+    all_states = list(SESSION.desired.values())
+    changed = [state for state in all_states if state.changed]
+    invalid = [state for state in changed if not state.valid]
+    with_warnings = [state for state in all_states if state.warnings]
+    summary = layout.box()
+    summary.label(
+        text=(
+            f"{len(all_states)} assets — +{sum(len(state.added) for state in changed)} added "
+            f"/ -{sum(len(state.removed) for state in changed)} removed"
+        )
+    )
+    summary.label(
+        text=f"{len(changed)} changed  {len(all_states) - len(changed)} unchanged  {len(with_warnings)} warnings  {len(invalid)} invalid"
+    )
+    row = box.row(align=True)
+    row.prop(props, "review_filter", text="")
+    row.prop(props, "review_search", text="", icon="VIEWZOOM")
+    states = filtered_review_states(props.review_search, props.review_filter)
+    prefs = batm_preferences(context)
     page_size = int(getattr(prefs, "review_page_size", 20))
     page_count = max(1, math.ceil(len(states) / page_size))
-    props.review_page = min(props.review_page, page_count - 1)
-    start = props.review_page * page_size
+    page = min(props.review_page, page_count - 1)
+    start = page * page_size
     for state in states[start : start + page_size]:
         row = box.row(align=True)
         toggle = row.operator(
@@ -315,14 +262,16 @@ def _draw_review(layout, context) -> None:
         toggle.token = state.key.token
         select = row.operator(
             "batm.review_select",
-            text=f"{state.key.datablock_name} [{state.key.id_type}]",
+            text=f"{state.key.datablock_name} [{state.key.id_type}]" + ("" if state.enabled else " — OFF"),
             icon="ERROR" if state.warnings else ("DECORATE_KEYFRAME" if state.changed else "CHECKMARK"),
         )
         select.token = state.key.token
         row.label(text=f"+{len(state.added)} / -{len(state.removed)}")
+    if not states:
+        box.label(text="No assets match the current search and filter", icon="INFO")
     navigation = box.row(align=True)
     navigation.operator("batm.review_page", text="", icon="TRIA_LEFT").delta = -1
-    navigation.label(text=f"Page {props.review_page + 1} / {page_count} — {len(states)} assets")
+    navigation.label(text=f"Page {page + 1} / {page_count} — {len(states)} assets")
     navigation.operator("batm.review_page", text="", icon="TRIA_RIGHT").delta = 1
 
     active = SESSION.desired.get(SESSION.active_review_token)
@@ -334,7 +283,9 @@ def _draw_review(layout, context) -> None:
         detail.label(text="After:")
         for tag in active.after:
             row = detail.row(align=True)
-            row.label(text=tag)
+            reasons = active.tag_reasons.get(tag.casefold(), [])
+            reason_text = f" ({reasons[0]})" if len(reasons) == 1 else f" ({len(reasons)} reasons)" if reasons else ""
+            row.label(text=tag + reason_text)
             remove = row.operator("batm.review_remove_tag", text="", icon="X")
             remove.token = active.key.token
             remove.value = tag
@@ -365,7 +316,7 @@ def _draw_review(layout, context) -> None:
     changed = [state for state in SESSION.desired.values() if state.changed]
     invalid = [state for state in changed if not state.valid]
     controls = layout.row(align=True)
-    controls.operator("batm.review_cancel", text="Cancel", icon="CANCEL")
+    controls.operator("batm.review_cancel", text="Discard Review", icon="TRASH")
     confirm = controls.row(align=True)
     confirm.enabled = bool(changed) and not invalid
     confirm.operator("batm.execute", text="Confirm and Apply", icon="CHECKMARK")

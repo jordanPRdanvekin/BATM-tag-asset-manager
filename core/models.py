@@ -106,6 +106,7 @@ class DesiredAssetState:
     added: list[str] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
     explanations: list[str] = field(default_factory=list)
+    tag_reasons: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     enabled: bool = True
 

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ..adapters.storage import read_json
 from ..adapters.worker_ipc import command_for, request_cancel
+
+DEFAULT_WORKER_TIMEOUT_SECONDS = 2000
 
 
 def _available_memory_gib() -> int:
@@ -49,6 +52,7 @@ def adaptive_worker_count(job_count: int, preference_limit: int = 4) -> int:
 class RunningJob:
     prepared: dict[str, Any]
     process: subprocess.Popen[Any]
+    deadline: float = 0.0
 
 
 @dataclass
@@ -76,7 +80,8 @@ class BatchScheduler:
                     stderr=subprocess.DEVNULL,
                     shell=False,
                 )
-                self.running.append(RunningJob(prepared=prepared, process=process))
+                timeout = float(prepared.get("timeout_seconds", DEFAULT_WORKER_TIMEOUT_SECONDS))
+                self.running.append(RunningJob(prepared=prepared, process=process, deadline=time.monotonic() + timeout))
             except OSError as exc:
                 self.failed.append(
                     {
@@ -88,16 +93,27 @@ class BatchScheduler:
                 break
 
     def poll(self) -> None:
+        now = time.monotonic()
         for job in list(self.running):
             code = job.process.poll()
+            timed_out = code is None and now > job.deadline
+            if timed_out:
+                job.process.kill()
+                job.process.wait()
+                code = -9
             if code is None:
                 continue
             self.running.remove(job)
             result = read_json(job.prepared["result_path"], {}) or {}
             record = {"prepared": job.prepared, "returncode": code, "result": result}
-            if code == 0 and result.get("success"):
+            if not timed_out and code == 0 and result.get("success"):
                 self.completed.append(record)
             else:
+                if timed_out and not result.get("success"):
+                    record["result"] = {
+                        "success": False,
+                        "error": f"Worker exceeded its deadline and was killed ({result.get('error', 'no result file')})",
+                    }
                 self.failed.append(record)
         self.start_available()
 

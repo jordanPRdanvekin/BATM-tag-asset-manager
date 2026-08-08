@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,21 @@ def ensure_dirs() -> dict[str, Path]:
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=True)
     return paths
+
+
+def prune_run_files(retention_days: int = 7) -> int:
+    """Remove run IPC scratch files older than retention_days. Returns the count removed."""
+    run_dir = ensure_dirs()["runs"]
+    cutoff = time.time() - max(1, retention_days) * 86400
+    removed = 0
+    for path in run_dir.rglob("*"):
+        if path.is_file() and path.stat().st_mtime < cutoff:
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
 
 
 def atomic_json_write(path: str | Path, value: Any) -> Path:

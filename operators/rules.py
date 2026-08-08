@@ -24,6 +24,17 @@ FIELDS = [
     ("collection_types", "Collection Types", "Object types contained in a Collection"),
     ("library_reference", "Library", "Owning Asset Library name"),
     ("path_tokens", "Path Tokens", "Tokens extracted from the .blend path"),
+    ("library_tag", "Library Tag", "Source library marked with a knowledge Tag"),
+    ("object_names", "Object Names", "Names of first-level Object children"),
+    ("object_types", "Object Types", "First-level Object child types"),
+    ("modifier_types", "Modifier Types", "Modifiers found on the asset data"),
+    ("material_names", "Material Names", "Materials assigned to the asset data"),
+    ("rig_types", "Rig Types", "Armature / rig structure of the asset"),
+    ("geometry_node_names", "Geometry Node Names", "Node groups used by the asset"),
+    ("bone_names", "Bone Names", "Bone names found in armatures"),
+    ("constraint_types", "Constraint Types", "Constraint types found on the asset"),
+    ("parent_names", "Parent Names", "Parent / family object names"),
+    ("hierarchy_depth", "Hierarchy Depth", "Maximum depth of the object hierarchy"),
 ]
 
 

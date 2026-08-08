@@ -1,8 +1,9 @@
-"""Analysis, editable Review, execution and automatic rollback operators."""
+﻿"""Analysis, editable Review, execution and automatic rollback operators."""
 
 from __future__ import annotations
 
 from collections import defaultdict
+import math
 from pathlib import Path
 from typing import Any
 import shutil
@@ -13,16 +14,21 @@ from bpy.props import IntProperty, StringProperty
 
 from ..adapters.blender_assets import (
     apply_current_file,
+    batm_preferences,
     current_tags,
     find_local_id,
+    refresh_asset_browser,
     set_local_tags,
     snapshot_selection,
 )
+from ..adapters.storage import prune_run_files
 from ..adapters.worker_ipc import prepare_request
 from ..core.models import AssetKey, DesiredAssetState, TagOperation
+from ..core.sanitizer import options_from_props
 from ..core.session import SESSION
 from ..engine.autotag import build_autotag_operations
-from ..engine.backup import create_backup, delete_backup, update_backup_states
+from ..engine.knowledge import load_knowledge
+from ..engine.backup import create_backup, delete_backup, prune_backups, update_backup_states
 from ..engine.fingerprint import fingerprint_file, fingerprints_match
 from ..engine.logging import persist_run_log, prune_logs
 from ..engine.scheduler import BatchScheduler, adaptive_worker_count
@@ -30,13 +36,6 @@ from ..engine.scheduler import BatchScheduler, adaptive_worker_count
 
 def _runtime(context):
     return context.window_manager.batm_runtime
-
-
-def _preferences(context):
-    for key, addon in context.preferences.addons.items():
-        if key.endswith("batch_asset_tag_manager") or key.endswith("BATM_4.0.0"):
-            return addon.preferences
-    return None
 
 
 def _sync_runtime(context, status: str | None = None) -> None:
@@ -49,33 +48,14 @@ def _sync_runtime(context, status: str | None = None) -> None:
 def _update_timing(context, started: float, fraction: float, detail: str = "") -> None:
     props = _runtime(context)
     elapsed = max(0.0, time.monotonic() - started)
+    raw_eta = elapsed * (1.0 - fraction) / fraction if fraction > 0.0 else 0.0
+    # EMA smoothing against the previously displayed ETA to avoid jumps.
+    if props.eta_seconds <= 0.0:
+        props.eta_seconds = raw_eta
+    else:
+        props.eta_seconds = props.eta_seconds * 0.65 + raw_eta * 0.35
     props.elapsed_seconds = elapsed
-    props.eta_seconds = elapsed * (1.0 - fraction) / fraction if fraction > 0.0 else 0.0
     props.progress_detail = detail
-
-
-def _recompile_preserving_disabled() -> None:
-    disabled = {token for token, state in SESSION.desired.items() if not state.enabled}
-    SESSION.compile()
-    for token in disabled:
-        if token in SESSION.desired:
-            SESSION.desired[token].enabled = False
-
-
-def _refresh_asset_browser(context) -> bool:
-    for window in context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
-            if area.type != "FILE_BROWSER" or getattr(area.spaces.active, "browse_mode", "") != "ASSETS":
-                continue
-            region = next((item for item in area.regions if item.type == "WINDOW"), None)
-            try:
-                with context.temp_override(window=window, screen=screen, area=area, region=region):
-                    result = bpy.ops.asset.library_refresh()
-                    return "FINISHED" in result
-            except RuntimeError:
-                continue
-    return False
 
 
 def _finish_idle(context, status: str, clear_operations: bool = False) -> None:
@@ -90,6 +70,10 @@ def _finish_idle(context, status: str, clear_operations: bool = False) -> None:
 
 def _worker_assets(snapshots) -> list[dict[str, Any]]:
     return [{"key": snapshot.key.to_dict()} for snapshot in snapshots]
+
+
+def _worker_timeout(context) -> float:
+    return float(getattr(batm_preferences(context), "worker_timeout_seconds", 2000))
 
 
 def _completed_paths(scheduler: BatchScheduler | None) -> set[str]:
@@ -146,6 +130,9 @@ class BATM_OT_run(bpy.types.Operator):
 
     _timer = None
     _started = 0.0
+    _hashing = False
+    _hash_paths: list[str] = []
+    _hash_total = 0
 
     @classmethod
     def poll(cls, context):
@@ -154,7 +141,7 @@ class BATM_OT_run(bpy.types.Operator):
     def execute(self, context):
         try:
             asset_type_filter = _runtime(context).asset_type_filter
-            snapshots = snapshot_selection(context, asset_type_filter)
+            snapshots = snapshot_selection(context, asset_type_filter, defer_fingerprints=True)
             if not snapshots:
                 self.report({"WARNING"}, "Select at least one Asset Browser asset")
                 return {"CANCELLED"}
@@ -162,47 +149,35 @@ class BATM_OT_run(bpy.types.Operator):
             if len(tokens) != len(set(tokens)):
                 raise RuntimeError("Selection contains ambiguous duplicate Asset identities")
             SESSION.begin()
+            prune_run_files()
+            for path in prune_backups(int(getattr(batm_preferences(context), "log_retention_days", 30))):
+                SESSION.add_message("INFO", "BACKUP_PRUNED", f"Removed old backup: {Path(path).name}")
             self._started = time.monotonic()
             SESSION.snapshots = {snapshot.key.token: snapshot for snapshot in snapshots}
+            SESSION.sanitize_options = options_from_props(_runtime(context))
             SESSION.add_message("INFO", "ANALYSIS_STARTED", f"Analyzing {len(snapshots)} selected assets")
-            _sync_runtime(context, "Analyzing selection...")
+            _sync_runtime(context, "Preparing files...")
             _runtime(context).progress = 0.0
+            _runtime(context).eta_seconds = 0.0
+            _runtime(context).eta_reliable = False
             context.window_manager.progress_begin(0, 100)
-
-            current_path = str(Path(bpy.data.filepath).resolve()) if bpy.data.filepath else ""
-            grouped: dict[str, list] = defaultdict(list)
-            for snapshot in snapshots:
-                if snapshot.writable and snapshot.key.blend_path and snapshot.key.blend_path != current_path:
-                    grouped[snapshot.key.blend_path].append(snapshot)
-                elif snapshot.excluded_reason:
-                    SESSION.add_message(
-                        "WARNING", "ASSET_EXCLUDED", snapshot.excluded_reason, asset=snapshot.key.to_dict()
-                    )
-
-            prepared = []
-            for index, (path, items) in enumerate(sorted(grouped.items())):
-                prepared.append(
-                    prepare_request(
-                        SESSION.run_id,
-                        index,
-                        {
-                            "mode": "ANALYZE",
-                            "blend_path": path,
-                            "fingerprint": items[0].fingerprint,
-                            "assets": _worker_assets(items),
-                        },
-                    )
-                )
-            if not prepared:
-                self._finish_analysis(context)
+            # Deferred fingerprinting: hash each unique .blend once in the modal
+            # loop so huge files do not freeze the UI on "Analyze".
+            self._hash_paths = sorted(
+                {
+                    snapshot.key.blend_path
+                    for snapshot in snapshots
+                    if snapshot.writable and snapshot.key.blend_path and not snapshot.fingerprint
+                }
+            )
+            self._hash_total = len(self._hash_paths)
+            self._hashing = bool(self._hash_paths)
+            if not self._hashing and not self._start_analysis(context):
+                context.window_manager.progress_end()
                 return {"FINISHED"}
-
-            prefs = _preferences(context)
-            limit = int(getattr(prefs, "max_workers", 4))
-            scheduler = BatchScheduler(prepared, adaptive_worker_count(len(prepared), limit))
-            SESSION.scheduler = scheduler
-            scheduler.start_available()
-            self._timer = context.window_manager.event_timer_add(0.25, window=context.window)
+            self._timer = context.window_manager.event_timer_add(
+                0.05 if self._hashing else 0.25, window=context.window
+            )
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
         except Exception as exc:
@@ -215,7 +190,82 @@ class BATM_OT_run(bpy.types.Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
 
+    def _start_analysis(self, context) -> bool:
+        """Group snapshots by .blend and dispatch ANALYZE workers. False when idle."""
+        current_path = str(Path(bpy.data.filepath).resolve()) if bpy.data.filepath else ""
+        grouped: dict[str, list] = defaultdict(list)
+        for snapshot in SESSION.snapshots.values():
+            if snapshot.writable and snapshot.key.blend_path and snapshot.key.blend_path != current_path:
+                grouped[snapshot.key.blend_path].append(snapshot)
+            elif snapshot.excluded_reason:
+                SESSION.add_message(
+                    "WARNING", "ASSET_EXCLUDED", snapshot.excluded_reason, asset=snapshot.key.to_dict()
+                )
+        prepared = []
+        for index, (path, items) in enumerate(sorted(grouped.items())):
+            prepared.append(
+                prepare_request(
+                    SESSION.run_id,
+                    index,
+                    {
+                        "mode": "ANALYZE",
+                        "blend_path": path,
+                        "fingerprint": items[0].fingerprint,
+                        "assets": _worker_assets(items),
+                    },
+                    timeout_seconds=_worker_timeout(context),
+                )
+            )
+        if not prepared:
+            self._finish_analysis(context)
+            return False
+        prefs = batm_preferences(context)
+        limit = int(getattr(prefs, "max_workers", 4))
+        SESSION.scheduler = BatchScheduler(prepared, adaptive_worker_count(len(prepared), limit))
+        SESSION.scheduler.start_available()
+        _sync_runtime(context, "Analyzing assets...")
+        return True
+
+    def _hash_modal(self, context):
+        if self._hash_paths:
+            path = self._hash_paths.pop()
+            try:
+                digest = fingerprint_file(path)
+            except OSError:
+                digest = {}
+            for snapshot in SESSION.snapshots.values():
+                if snapshot.key.blend_path == path:
+                    snapshot.fingerprint = dict(digest)
+        done = self._hash_total - len(self._hash_paths)
+        fraction = done / max(1, self._hash_total)
+        props = _runtime(context)
+        props.progress = fraction * 0.40
+        props.current_file = ""
+        props.task_label = "Preparing files"
+        props.eta_reliable = False
+        _update_timing(context, self._started, fraction * 0.40, f"Files hashed: {done}/{self._hash_total}")
+        context.window_manager.progress_update(props.progress * 100)
+        if self._hash_paths:
+            props.status = f"Preparing files ({done}/{self._hash_total})..."
+            return {"PASS_THROUGH"}
+        self._hashing = False
+        if not self._start_analysis(context):
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+            context.window_manager.progress_update(100)
+            return {"FINISHED"}
+        return {"PASS_THROUGH"}
+
     def modal(self, context, event):
+        if event.type == "ESC" and self._hashing:
+            self._hash_paths = []
+            self._hashing = False
+            SESSION.add_message("WARNING", "ANALYSIS_CANCELLED", "Analysis cancelled by user")
+            context.window_manager.progress_end()
+            _finish_idle(context, "Analysis cancelled")
+            return {"CANCELLED"}
+        if event.type == "TIMER" and self._hashing:
+            return self._hash_modal(context)
         scheduler = SESSION.scheduler
         if event.type == "ESC" and scheduler:
             scheduler.cancel()
@@ -224,11 +274,13 @@ class BATM_OT_run(bpy.types.Operator):
             return {"PASS_THROUGH"}
         scheduler.poll()
         total = max(1, scheduler.total)
-        _runtime(context).progress = scheduler.confirmed_assets / max(1, scheduler.total_assets)
+        asset_fraction = scheduler.confirmed_assets / max(1, scheduler.total_assets)
+        _runtime(context).progress = 0.40 + asset_fraction * 0.55
+        _runtime(context).eta_reliable = True
         _update_timing(
             context,
             self._started,
-            _runtime(context).progress,
+            0.40 + asset_fraction * 0.55,
             (
                 f"Assets verified: {scheduler.confirmed_assets}/{scheduler.total_assets}  "
                 f"Files: {scheduler.confirmed}/{total}  Failed: {len(scheduler.failed)}"
@@ -269,12 +321,17 @@ class BATM_OT_run(bpy.types.Operator):
                 if snapshot:
                     snapshot.tags = [str(tag) for tag in value.get("tags", [])]
                     snapshot.facts.update(value.get("facts", {}))
+                    snapshot.facts["library_reference"] = snapshot.key.library_reference
         self._finish_analysis(context)
         return {"FINISHED"}
 
     def _finish_analysis(self, context) -> None:
+        _sync_runtime(context, "Building Preview...")
         SESSION.operations = [operation for operation in SESSION.operations if operation.origin != "AUTO"]
-        SESSION.operations.extend(build_autotag_operations(list(SESSION.snapshots.values()), SESSION.rules))
+        SESSION.operations.extend(
+            build_autotag_operations(list(SESSION.snapshots.values()), SESSION.rules, load_knowledge())
+        )
+        SESSION.sanitize_options = options_from_props(_runtime(context))
         SESSION.compile()
         SESSION.set_phase("REVIEW_READY")
         changed = sum(1 for state in SESSION.desired.values() if state.changed)
@@ -331,7 +388,7 @@ class BATM_OT_review_add_tag(bpy.types.Operator):
                 explanation="Review Add",
             )
         )
-        _recompile_preserving_disabled()
+        SESSION.recompile_preserving_disabled()
         _sync_runtime(context, "Review updated")
         return {"FINISHED"}
 
@@ -354,7 +411,7 @@ class BATM_OT_review_remove_tag(bpy.types.Operator):
                 explanation="Review Remove",
             )
         )
-        _recompile_preserving_disabled()
+        SESSION.recompile_preserving_disabled()
         _sync_runtime(context, "Review updated")
         return {"FINISHED"}
 
@@ -367,7 +424,7 @@ class BATM_OT_review_toggle_operation(bpy.types.Operator):
     def execute(self, context):
         if 0 <= self.index < len(SESSION.operations):
             SESSION.operations[self.index].enabled = not SESSION.operations[self.index].enabled
-            _recompile_preserving_disabled()
+            SESSION.recompile_preserving_disabled()
             _sync_runtime(context, "Review operation updated")
         return {"FINISHED"}
 
@@ -379,21 +436,34 @@ class BATM_OT_review_page(bpy.types.Operator):
 
     def execute(self, context):
         props = _runtime(context)
-        props.review_page = max(0, props.review_page + self.delta)
+        from ..core.session import filtered_review_states
+
+        states = filtered_review_states(props.review_search, props.review_filter)
+        prefs = batm_preferences(context)
+        page_size = max(1, int(getattr(prefs, "review_page_size", 20)))
+        page_count = max(1, math.ceil(len(states) / page_size))
+        proposed = props.review_page + self.delta
+        props.review_page = max(0, min(proposed, page_count - 1))
         return {"FINISHED"}
 
 
 class BATM_OT_review_cancel(bpy.types.Operator):
     bl_idname = "batm.review_cancel"
-    bl_label = "Cancel Review"
+    bl_label = "Discard Review"
+    bl_description = "Discard the current Review and close the session. No file is changed"
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         SESSION.set_phase("IDLE")
         SESSION.snapshots.clear()
         SESSION.desired.clear()
         SESSION.operations.clear()
-        _sync_runtime(context, "Review cancelled; no files were changed")
+        SESSION.selected_tags.clear()
+        _sync_runtime(context, "Review discarded; no files were changed")
         _runtime(context).progress = 0.0
+        _runtime(context).eta_reliable = False
         return {"FINISHED"}
 
 
@@ -461,16 +531,18 @@ class BATM_OT_execute(bpy.types.Operator):
                                 for state in items
                             ],
                         },
+                        timeout_seconds=_worker_timeout(context),
                     )
                 )
-            SESSION.execution_requests = prepared
             SESSION.set_phase("EXECUTING")
             _sync_runtime(context, "Applying approved changes...")
             _runtime(context).progress = 0.0
+            _runtime(context).eta_seconds = 0.0
+            _runtime(context).eta_reliable = False
             context.window_manager.progress_begin(0, 100)
             if not prepared:
                 return self._apply_current_and_finish(context)
-            prefs = _preferences(context)
+            prefs = batm_preferences(context)
             limit = int(getattr(prefs, "max_workers", 4))
             SESSION.scheduler = BatchScheduler(prepared, adaptive_worker_count(len(prepared), limit))
             SESSION.scheduler.start_available()
@@ -498,6 +570,7 @@ class BATM_OT_execute(bpy.types.Operator):
             return {"PASS_THROUGH"}
         scheduler.poll()
         _runtime(context).progress = scheduler.confirmed_assets / max(1, scheduler.total_assets)
+        _runtime(context).eta_reliable = True
         _update_timing(
             context,
             self._started,
@@ -602,6 +675,7 @@ class BATM_OT_execute(bpy.types.Operator):
                             for item in request.get("assets", [])
                         ],
                     },
+                    timeout_seconds=_worker_timeout(context),
                 )
             )
         try:
@@ -631,7 +705,7 @@ class BATM_OT_execute(bpy.types.Operator):
         if not restore_jobs:
             return self._finish_restored(context)
         self._mode = "RESTORE"
-        prefs = _preferences(context)
+        prefs = batm_preferences(context)
         limit = int(getattr(prefs, "max_workers", 4))
         SESSION.scheduler = BatchScheduler(restore_jobs, adaptive_worker_count(len(restore_jobs), limit))
         SESSION.scheduler.start_available()
@@ -654,7 +728,7 @@ class BATM_OT_execute(bpy.types.Operator):
             },
         )
         _runtime(context).last_log_path = str(path)
-        prefs = _preferences(context)
+        prefs = batm_preferences(context)
         prune_logs(
             int(getattr(prefs, "log_retention_days", 30)),
             int(getattr(prefs, "log_retention_runs", 50)),
@@ -669,7 +743,7 @@ class BATM_OT_execute(bpy.types.Operator):
         delete_backup(SESSION.backup_path)
         self._persist_log(context, "SUCCEEDED")
         SESSION.set_phase("REFRESHING")
-        refreshed = _refresh_asset_browser(context)
+        refreshed = refresh_asset_browser(context)
         _finish_idle(context, "Completed and verified" + ("" if refreshed else "; refresh unavailable"), True)
         return {"FINISHED"}
 
@@ -687,7 +761,7 @@ class BATM_OT_execute(bpy.types.Operator):
         delete_backup(SESSION.backup_path)
         self._persist_log(context, "RESTORED")
         SESSION.set_phase("REFRESHING")
-        _refresh_asset_browser(context)
+        refresh_asset_browser(context)
         _finish_idle(context, "Operation failed or was cancelled; rollback completed", True)
         return {"CANCELLED"}
 
@@ -700,7 +774,7 @@ class BATM_OT_execute(bpy.types.Operator):
         )
         self._persist_log(context, "ROLLBACK_FAILED")
         SESSION.set_phase("REFRESHING")
-        _refresh_asset_browser(context)
+        refresh_asset_browser(context)
         _finish_idle(context, "Rollback failed; open Diagnostics immediately")
         _runtime(context).diagnostics_expanded = True
         return {"CANCELLED"}
