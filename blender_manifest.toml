@@ -1,0 +1,23 @@
+schema_version = "1.0.0"
+id = "batch_asset_tag_manager"
+version = "4.0.0"
+name = "Batch Asset Tag Manager"
+tagline = "Review and safely edit Asset Browser tags in batches"
+maintainer = "Jordan Perez"
+type = "add-on"
+blender_version_min = "5.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+platforms = ["windows-x64"]
+tags = ["Pipeline"]
+
+[permissions]
+files = "Read asset libraries and store BATM rules backups and logs"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/*.zip",
+  "/tests/",
+  "/docs/",
+  "/.git/",
+]

@@ -1,0 +1,648 @@
+BATM v4.x
+Single Source of Truth (SSOT)
+01. Visión General
+¿Qué es BATM?
+
+BATM (Batch Asset Tag Manager) es una extensión profesional para Blender 5.2 diseñada para la gestión masiva de etiquetas (Tags) del Asset Browser.
+
+Su objetivo es automatizar la organización de bibliotecas de Assets mediante herramientas de análisis, edición y procesamiento por lotes, permitiendo modificar cientos o miles de Assets de forma rápida, consistente y segura sin necesidad de abrir individualmente cada archivo .blend.
+
+A diferencia de un editor tradicional de etiquetas, BATM no aplica modificaciones inmediatamente. Todas las acciones se convierten primero en operaciones pendientes que el usuario puede revisar antes de confirmar su ejecución. Este enfoque garantiza un flujo de trabajo predecible, reversible y adaptado a bibliotecas de producción de cualquier tamaño.
+
+Objetivo del Proyecto
+
+BATM nace para resolver un problema habitual en proyectos de animación, videojuegos, VFX y visualización: mantener una taxonomía uniforme en bibliotecas de Assets que pueden contener miles de elementos.
+
+La extensión permite administrar de forma centralizada las etiquetas de una biblioteca completa mediante un flujo de trabajo seguro y escalable, reduciendo drásticamente el tiempo dedicado a tareas repetitivas de organización.
+
+Su propósito no es sustituir el Asset Browser de Blender, sino ampliar sus capacidades mediante herramientas especializadas para la gestión de Tags.
+
+Filosofía de Diseño
+
+Toda decisión de diseño dentro de BATM sigue cuatro principios fundamentales:
+
+Simplicidad
+
+La interfaz debe ser clara, directa y centrada en las tareas más habituales. Cada herramienta debe tener una única responsabilidad y evitar configuraciones innecesarias.
+
+Seguridad
+
+Ninguna modificación se aplica directamente sobre los Assets. Todas las operaciones pasan por un proceso de revisión antes de ser ejecutadas, minimizando el riesgo de cambios accidentales.
+
+Escalabilidad
+
+El mismo flujo de trabajo debe ser válido tanto para unos pocos Assets como para bibliotecas con miles de elementos. El usuario nunca necesita cambiar su forma de trabajar en función del tamaño de la biblioteca.
+
+Consistencia
+
+Todas las herramientas de BATM están orientadas a mantener una nomenclatura uniforme, eliminando inconsistencias y facilitando la organización de los Assets mediante reglas comunes de etiquetado.
+
+Alcance de BATM
+
+BATM trabaja exclusivamente sobre las Tags asociadas a los Assets del Asset Browser.
+
+Esto incluye tanto la edición manual como la generación automática de nuevas etiquetas a partir del análisis del propio Asset.
+
+La extensión no modifica la geometría, materiales, animaciones, catálogos u otros datos del archivo. Toda la información analizada durante el proceso de AutoTag se utiliza únicamente como contexto para generar propuestas de nuevas etiquetas.
+
+En otras palabras, BATM analiza muchos tipos de información, pero su único objetivo es crear, modificar, eliminar o reorganizar Tags.
+
+Flujo General
+
+Todo el funcionamiento de BATM puede resumirse en un único flujo de trabajo:
+
+Seleccionar Assets
+        │
+        ▼
+Analizar la selección
+        │
+        ▼
+Generar operaciones de Tags
+        │
+        ▼
+Crear una vista previa editable
+        │
+        ▼
+Revisión y aprobación del usuario
+        │
+        ▼
+Procesamiento por lotes
+        │
+        ▼
+Aplicar únicamente los cambios aprobados
+
+Este flujo nunca cambia. Independientemente de la herramienta utilizada —AutoTag, Quick Add, Replace, Merge o cualquier otra operación— todas terminan siguiendo exactamente el mismo proceso.
+02. Interfaz de Usuario
+Filosofía de la Interfaz
+
+La interfaz de BATM está diseñada para ofrecer un flujo de trabajo simple, directo y predecible. A diferencia de otras herramientas de gestión de Assets, BATM concentra todas sus funciones en un número reducido de paneles claramente diferenciados, evitando configuraciones innecesarias y priorizando la rapidez de uso.
+
+Cada bloque de la interfaz tiene una única responsabilidad y representa una etapa concreta del flujo de trabajo. El usuario puede comprender el funcionamiento completo del addon recorriendo la interfaz de arriba hacia abajo.
+
+La interfaz principal está compuesta por tres bloques visibles y un bloque de diagnóstico que permanece oculto durante el uso normal.
+
+1. Métricas
+
+El primer bloque proporciona una visión general del estado de la biblioteca activa y de la selección actual.
+
+Su función es únicamente informativa y nunca modifica ningún Asset ni genera operaciones dentro de BATM.
+
+La información mostrada debe actualizarse automáticamente siempre que cambie el contexto del Asset Browser.
+
+Información mostrada:
+
+Biblioteca de Assets activa.
+Número total de Assets contenidos en la biblioteca activa.
+Número de Assets seleccionados actualmente por el usuario.
+
+Este panel permite conocer rápidamente sobre qué biblioteca se está trabajando y cuál será el alcance de las operaciones posteriores.
+
+2. Run BATM
+
+Run BATM constituye el núcleo de la interfaz y el principal punto de entrada de todas las operaciones del addon.
+
+Toda modificación de etiquetas realizada por BATM termina siendo ejecutada desde este botón, independientemente de si las operaciones fueron generadas automáticamente mediante AutoTag o añadidas manualmente desde el editor de etiquetas.
+
+Al pulsar Run BATM, la extensión inicia un flujo guiado compuesto por varias etapas consecutivas.
+
+AutoTag
+
+La primera fase consiste en analizar todos los Assets seleccionados para generar automáticamente etiquetas candidatas.
+
+Durante este proceso se muestra una ventana de progreso que informa en tiempo real del estado del análisis.
+
+La barra de progreso refleja el avance del AutoTag mientras BATM inspecciona la selección y construye la lista inicial de operaciones.
+
+Una vez finalizado el análisis, el proceso continúa automáticamente con la siguiente etapa.
+
+Preview
+
+Tras completar el AutoTag, BATM genera una vista previa completa de todas las operaciones pendientes.
+
+Esta ventana muestra de forma organizada todas las modificaciones que serán realizadas sobre las etiquetas de cada Asset antes de que se produzca cualquier cambio real.
+
+El Preview permite revisar el resultado global de la operación y modificar libremente las acciones propuestas antes de aprobar su ejecución.
+
+Todas las operaciones procedentes del AutoTag y del Manual Tag Editor aparecen unificadas en esta vista.
+
+Ejecución
+
+Cuando el usuario confirma el Preview, BATM inicia el procesamiento de las operaciones aprobadas.
+
+Durante esta fase vuelve a mostrarse una barra de progreso independiente que representa el estado real del procesamiento por lotes.
+
+La información presentada incluye el progreso global de la ejecución y el estado de las operaciones actualmente procesadas.
+
+Una vez completado el procesamiento, BATM actualiza automáticamente la información del Asset Browser y elimina los datos temporales generados durante la operación.
+
+3. Manual Tag Editor
+
+El Manual Tag Editor constituye el entorno de edición manual de etiquetas de BATM.
+
+A diferencia del AutoTag, todas las operaciones son definidas directamente por el usuario.
+
+Este panel permite trabajar simultáneamente sobre múltiples Assets mediante herramientas orientadas a la edición masiva de Tags.
+
+Las principales herramientas disponibles son:
+
+Visualización de etiquetas comunes compartidas por todos los Assets seleccionados.
+Visualización de etiquetas individuales presentes únicamente en parte de la selección.
+Selección múltiple de etiquetas.
+Búsqueda de etiquetas existentes.
+Adición manual de nuevas etiquetas.
+Eliminación de etiquetas seleccionadas.
+Sustitución de una etiqueta por una o varias nuevas.
+
+Ninguna de estas acciones modifica inmediatamente los Assets.
+
+Cada operación realizada desde el Manual Tag Editor se incorpora automáticamente a la lista de operaciones pendientes de BATM y será presentada posteriormente durante el Preview junto con las sugerencias generadas por AutoTag.
+
+De esta forma, todas las modificaciones siguen exactamente el mismo flujo de validación antes de ser aplicadas.
+
+Diagnostics & Logs
+
+El panel Diagnostics & Logs forma parte de BATM, pero permanece oculto durante el uso habitual para mantener la interfaz limpia y centrada en las herramientas principales.
+
+Su objetivo es proporcionar información técnica únicamente cuando resulta necesaria o cuando BATM detecta situaciones que requieren la atención del usuario.
+
+Entre la información que puede mostrar se encuentra:
+
+Total de Tags.
+Número de Tags únicas.
+Número de Tags duplicadas.
+Número de Tags vacías.
+Número de Tags inválidas.
+Assets que requieren limpieza.
+Operaciones pendientes.
+Advertencias y errores detectados durante el análisis.
+Resultados de auditorías internas.
+Información detallada de ejecución y registro de eventos.
+
+Este panel también integra el sistema de copias de seguridad utilizado por BATM.
+
+Antes de iniciar el procesamiento, la extensión genera automáticamente un punto de restauración que permite revertir la operación en caso necesario. Si el procesamiento finaliza correctamente y todas las operaciones son aprobadas sin incidencias, dicha copia de seguridad se elimina automáticamente para evitar la acumulación innecesaria de datos temporales.
+
+En condiciones normales de funcionamiento, el usuario no necesita interactuar con este panel, que actúa como una herramienta de mantenimiento y diagnóstico destinada principalmente a la recuperación ante errores y a la supervisión del estado interno del addon. 
+
+03. Funcionamiento Interno
+Filosofía General
+
+Todas las herramientas de BATM siguen exactamente el mismo principio: ninguna modifica directamente las etiquetas de un Asset.
+
+Cualquier acción realizada por el usuario o generada automáticamente por la extensión se transforma primero en una operación pendiente. Estas operaciones permanecen en memoria hasta que el usuario las revisa y aprueba durante el Preview.
+
+Solo tras la confirmación del usuario comienza el procesamiento real sobre los Assets seleccionados.
+
+Este enfoque garantiza un flujo de trabajo seguro, reversible y completamente predecible.
+
+Flujo General
+
+Todo el procesamiento de BATM sigue siempre la misma secuencia.
+
+Seleccionar Assets
+        │
+        ▼
+Obtener información de Blender
+        │
+        ▼
+Generar operaciones
+        │
+        ▼
+Sanitizar operaciones
+        │
+        ▼
+Crear Preview
+        │
+        ▼
+Usuario revisa
+        │
+        ▼
+Confirmación
+        │
+        ▼
+Crear Backup
+        │
+        ▼
+Procesamiento por Batches
+        │
+        ▼
+Actualizar Asset Browser
+        │
+        ▼
+Eliminar Backup
+        │
+        ▼
+Finalizar
+
+Este flujo nunca cambia, independientemente de la herramienta utilizada.
+
+Métricas
+
+El panel de Métricas consulta continuamente el estado del contexto actual utilizando la API pública de Blender 5.2.
+
+Su única finalidad es informar al usuario.
+
+Nunca genera operaciones.
+
+Nunca modifica Assets.
+
+La información mostrada se obtiene dinámicamente del Asset Browser y se actualiza cuando cambia la biblioteca activa o la selección.
+
+Las métricas principales son:
+
+Biblioteca de Assets activa.
+Número total de Assets disponibles.
+Número de Assets seleccionados.
+
+Estas consultas son de solo lectura y no afectan al rendimiento del procesamiento.
+
+AutoTag
+
+AutoTag constituye el motor de generación automática de etiquetas.
+
+Su función consiste en analizar cada Asset seleccionado y proponer nuevas Tags utilizando únicamente información ya existente en Blender.
+
+Durante el análisis puede utilizar, entre otros, los siguientes datos públicos de la API:
+
+Nombre del Asset.
+Tipo de ID (Object, Material, Collection, NodeTree, Action, World, etc.).
+Tipo de objeto (Mesh, Armature, Camera, Light, Empty, Curve, Grease Pencil, etc.).
+Número de objetos contenidos.
+Tipos de datos presentes.
+Nombre de la biblioteca.
+Información accesible desde el Asset Browser.
+
+Toda esta información se transforma en una colección de etiquetas candidatas.
+
+Por ejemplo:
+
+Environment_OakTree
+
+↓
+
+Environment
+Oak
+Tree
+Object
+Mesh
+Nature
+
+AutoTag nunca escribe estas etiquetas directamente.
+
+Únicamente crea operaciones pendientes que posteriormente serán revisadas durante el Preview.
+
+Manual Tag Editor
+
+El Manual Tag Editor permite construir operaciones manuales sobre las etiquetas de múltiples Assets simultáneamente.
+
+El usuario puede:
+
+seleccionar varias etiquetas;
+añadir nuevas;
+eliminar etiquetas existentes;
+reemplazar una etiqueta por otra;
+buscar etiquetas dentro de la selección;
+trabajar sobre etiquetas comunes o individuales.
+
+Cada acción genera nuevas operaciones pendientes.
+
+En ningún momento se modifica directamente la información almacenada en los Assets.
+
+Sanitización
+
+Antes de construir el Preview, BATM ejecuta automáticamente una fase de saneamiento sobre todas las operaciones generadas.
+
+Esta etapa garantiza que la lista final sea coherente antes de ser presentada al usuario.
+
+Entre las tareas de saneamiento se incluyen:
+
+eliminación de operaciones duplicadas;
+eliminación de etiquetas vacías;
+eliminación de espacios innecesarios;
+normalización del separador configurado;
+unificación del formato elegido (Title Case, snake_case, camelCase, etc.);
+división automática de cadenas que contienen múltiples etiquetas;
+combinación de operaciones redundantes.
+
+El saneamiento actúa únicamente sobre las operaciones pendientes.
+
+Nunca modifica todavía los Assets.
+
+Preview
+
+El Preview representa el punto central del flujo de trabajo.
+
+Su finalidad es mostrar exactamente qué ocurrirá antes de escribir cualquier cambio.
+
+Para cada Asset se presentan dos estados claramente diferenciados:
+
+ANTES
+
+↓
+
+DESPUÉS
+
+El usuario puede:
+
+aceptar operaciones;
+eliminar operaciones;
+modificar etiquetas propuestas;
+añadir nuevas operaciones;
+desactivar cambios concretos.
+
+Todas las modificaciones realizadas dentro del Preview actualizan inmediatamente la cola de operaciones.
+
+Hasta que el usuario confirme esta ventana, ningún Asset ha sido modificado.
+
+Backup
+
+Tras la aprobación del Preview, BATM crea automáticamente un punto de restauración.
+
+Este Backup almacena exclusivamente la información necesaria para recuperar el estado original de las etiquetas procesadas.
+
+Si la ejecución finaliza correctamente, el Backup se elimina automáticamente.
+
+Si ocurre un error crítico o el usuario solicita la restauración, BATM puede reconstruir el estado previo utilizando esta copia temporal.
+
+Procesamiento
+
+Una vez aprobado el Preview comienza el procesamiento real.
+
+BATM organiza automáticamente las operaciones utilizando un planificador por lotes (Batch Scheduler).
+
+El usuario puede definir:
+
+tamaño máximo del lote;
+número máximo de Assets procesados simultáneamente.
+
+El Scheduler adapta estos valores cuando detecta que Blender podría perder capacidad de respuesta.
+
+El procesamiento utiliza únicamente la API pública de Blender 5.2 y actualiza la barra de progreso mediante:
+
+WindowManager.progress_begin()
+WindowManager.progress_update()
+WindowManager.progress_end()
+bpy.app.timers
+
+Este enfoque mantiene la interfaz reactiva incluso durante operaciones largas.
+
+Actualización del Asset Browser
+
+Una vez finalizado el procesamiento, BATM solicita la actualización de la información del Asset Browser utilizando los mecanismos públicos disponibles en Blender 5.2.
+
+El objetivo es que todas las modificaciones realizadas sobre las etiquetas sean visibles inmediatamente, sin requerir acciones manuales adicionales por parte del usuario.
+
+Diagnóstico
+
+El sistema de diagnóstico supervisa continuamente el estado interno de BATM.
+
+Durante el funcionamiento normal permanece oculto y no interfiere con el flujo de trabajo.
+
+Solo se activa cuando detecta situaciones que requieren atención.
+
+Entre otras comprobaciones, puede identificar:
+
+operaciones inválidas;
+errores durante el procesamiento;
+etiquetas inconsistentes;
+Assets que requieren limpieza;
+fallos de acceso a bibliotecas;
+errores de compatibilidad con la API pública;
+incidencias durante la ejecución por lotes.
+
+Cuando es necesario, el panel muestra información suficiente para localizar el problema sin exponer detalles internos innecesarios.
+
+Registro de Eventos (Logs)
+
+BATM mantiene un registro estructurado de las operaciones realizadas durante cada ejecución.
+
+Los registros pueden incluir:
+
+hora de inicio;
+hora de finalización;
+duración;
+número de Assets procesados;
+número de etiquetas añadidas;
+número de etiquetas eliminadas;
+operaciones omitidas;
+advertencias;
+errores detectados;
+excepciones producidas durante el procesamiento.
+
+Estos registros facilitan tanto la auditoría de una ejecución como el diagnóstico de posibles incidencias. 
+
+04. Arquitectura y Desarrollo
+Objetivo
+
+BATM está diseñado para ser una extensión modular, mantenible y escalable.
+
+Cada componente debe tener una única responsabilidad y poder evolucionar independientemente del resto del sistema.
+
+La arquitectura debe facilitar la incorporación de nuevas herramientas sin afectar al comportamiento existente, manteniendo siempre una separación clara entre la interfaz, la lógica y el procesamiento de las etiquetas.
+
+Arquitectura General
+
+BATM se organiza en cinco capas independientes.
+
+┌──────────────────────────────┐
+│          UI Layer            │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│          Operators           │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│            Core              │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│      Processing Engine       │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│          Utilities           │
+└──────────────────────────────┘
+
+Cada capa tiene una única responsabilidad y únicamente puede comunicarse con las capas inmediatamente inferiores.
+
+UI Layer
+
+La interfaz únicamente muestra información y recoge acciones del usuario.
+
+Nunca modifica etiquetas.
+
+Nunca analiza Assets.
+
+Nunca contiene lógica de negocio.
+
+Su única responsabilidad es representar el estado de BATM y lanzar operadores de Blender.
+
+Operators
+
+Los operadores representan las acciones visibles para el usuario.
+
+Ejemplos:
+
+Run BATM
+Quick Add
+Quick Remove
+Replace Tag
+Restore Backup
+Export Logs
+Diagnostics
+
+Los operadores no implementan lógica de procesamiento.
+
+Su única función consiste en recibir la acción del usuario y delegarla al Core o al Processing Engine.
+
+Core
+
+El Core constituye el núcleo administrativo de BATM.
+
+Gestiona el estado interno del addon.
+
+Entre sus responsabilidades se encuentran:
+
+configuración del usuario;
+preferencias;
+cola de operaciones;
+estado del Preview;
+configuración del Batch Scheduler;
+copias de seguridad;
+historial de ejecución;
+comunicación entre módulos.
+
+El Core nunca modifica directamente los Assets.
+
+Processing Engine
+
+El Processing Engine contiene toda la lógica funcional de BATM.
+
+Es el encargado de transformar las acciones del usuario en operaciones sobre las etiquetas.
+
+Está compuesto por motores especializados e independientes.
+
+Entre ellos:
+
+AutoTag Engine
+Manual Tag Engine
+Sanitizer Engine
+Preview Engine
+Batch Scheduler
+Progress Engine
+Backup Engine
+Restore Engine
+Diagnostics Engine
+Logging Engine
+
+Cada motor realiza una única tarea y puede evolucionar sin afectar al resto del sistema.
+
+Utilities
+
+Las utilidades agrupan funciones reutilizables utilizadas por todo el proyecto.
+
+Por ejemplo:
+
+validaciones;
+funciones auxiliares;
+serialización;
+manejo de rutas;
+temporizadores;
+compatibilidad entre versiones de Blender;
+acceso a la API pública;
+herramientas comunes.
+
+Las Utilities nunca contienen lógica específica de BATM.
+
+Organización del Proyecto
+
+La estructura recomendada del proyecto es la siguiente:
+
+batm/
+
+│
+├── __init__.py
+├── blender_manifest.toml
+│
+├── ui/
+│   ├── panels.py
+│   ├── lists.py
+│   ├── preview.py
+│   └── dialogs.py
+│
+├── operators/
+│   ├── run.py
+│   ├── manual_tags.py
+│   ├── diagnostics.py
+│   └── backup.py
+│
+├── core/
+│   ├── queue.py
+│   ├── state.py
+│   ├── preferences.py
+│   └── scheduler.py
+│
+├── engine/
+│   ├── autotag.py
+│   ├── sanitizer.py
+│   ├── preview.py
+│   ├── processor.py
+│   ├── backup.py
+│   ├── diagnostics.py
+│   └── logging.py
+│
+├── utils/
+│   ├── helpers.py
+│   ├── compatibility.py
+│   ├── timers.py
+│   ├── validation.py
+│   └── serialization.py
+│
+└── resources/
+
+Esta organización favorece un crecimiento ordenado del proyecto y facilita el mantenimiento a largo plazo.
+
+Compatibilidad con Blender 5.2
+
+BATM debe utilizar exclusivamente la API pública de Blender siempre que sea posible.
+
+La extensión debe integrarse con el sistema oficial de Extensions y respetar el modelo de datos del Asset Browser.
+
+Entre las principales APIs utilizadas se encuentran:
+
+Asset Browser API.
+Asset Representation API.
+Asset Metadata API.
+ID DataBlocks.
+RNA.
+bpy.app.timers.
+WindowManager.progress_begin().
+WindowManager.progress_update().
+WindowManager.progress_end().
+Operadores modales.
+Sistema de Undo de Blender.
+blender_manifest.toml.
+
+No deben utilizarse estructuras internas o APIs no documentadas cuya compatibilidad futura no esté garantizada.
+
+Principios de Desarrollo
+
+Toda nueva funcionalidad incorporada a BATM debe respetar los siguientes principios:
+
+Mantener la filosofía minimalista de la interfaz.
+Trabajar exclusivamente sobre las Tags del Asset Browser.
+Utilizar únicamente APIs públicas de Blender siempre que sea posible.
+No modificar ningún Asset sin la aprobación previa del usuario.
+Mantener el flujo AutoTag → Sanitización → Preview → Procesamiento.
+Garantizar que todas las operaciones sean reversibles mediante un Backup temporal.
+Mantener una separación estricta entre interfaz, operadores y lógica de negocio.
+Diseñar componentes independientes, reutilizables y fácilmente ampliables.
+Priorizar la estabilidad y la mantenibilidad frente a soluciones rápidas o específicas.
+Visión del Proyecto
+
+BATM no pretende reemplazar el Asset Browser de Blender ni convertirse en un gestor completo de activos.
+
+Su propósito es ampliar las capacidades del sistema de etiquetas mediante herramientas de análisis, automatización y procesamiento masivo que permitan mantener bibliotecas organizadas de forma rápida, consistente y segura.
+
+Toda decisión de diseño debe reforzar esta idea: BATM es un motor especializado en la gestión inteligente de Tags, integrado de forma nativa con Blender 5.2 y construido para simplificar la organización de grandes bibliotecas de Assets sin alterar el flujo de trabajo habitual del usuario.
