@@ -1,0 +1,14 @@
+{
+  "assets": [
+    {
+      "key": "x"
+    }
+  ],
+  "cancel_path": "E:\\Descargas\\pruebas codigo\\BATM tag asset manager\\BATM tag asset manager\\.batm_test\\runs\\run-1\\cancel.requested",
+  "mode": "ANALYZE",
+  "result_path": "E:\\Descargas\\pruebas codigo\\BATM tag asset manager\\BATM tag asset manager\\.batm_test\\runs\\run-1\\result_00000.json",
+  "run_id": "run-1",
+  "schema_version": 1,
+  "status_path": "E:\\Descargas\\pruebas codigo\\BATM tag asset manager\\BATM tag asset manager\\.batm_test\\runs\\run-1\\status_00000.json",
+  "timeout_seconds": 123.0
+}
