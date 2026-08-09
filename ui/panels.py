@@ -48,10 +48,9 @@ def _draw_metrics(layout, context) -> None:
     box = layout.box()
     if not _collapsible_header(box, props, "metrics_expanded", "Current Library"):
         return
-    row = box.row()
-    row.operator("batm.refresh_inventory", text="", icon="FILE_REFRESH")
     library_label = active_library_label(context)
-    box.label(text=library_label, icon="DISCLOSURE_TRI_DOWN")
+    row = box.row()
+    row.label(text=library_label, icon="DISCLOSURE_TRI_DOWN")
     library_count = INVENTORY.count_for_reference(library_label)
     if library_count is not None:
         box.label(text=f"Assets on Library: {library_count:,}")
@@ -61,12 +60,11 @@ def _draw_metrics(layout, context) -> None:
         box.label(text=f"Assets on Library: {INVENTORY.status}")
     box.label(text=f"Selected: {len(selected_assets(context)):,}")
     catalog = _current_catalog_label(context)
-    if catalog:
-        box.label(text=f"Current Catalog: {catalog}")
-    box.prop(props, "asset_type_filter", text="Asset Type Filter")
     filter_label = _current_filter_label(context)
+    context_line = catalog or "No Catalog"
     if filter_label:
-        box.label(text=f"Filter: {filter_label}")
+        context_line += f" — {filter_label}"
+    box.label(text=f"View: {context_line}")
     if "Scanning" in INVENTORY.status:
         box.label(text=INVENTORY.status, icon="TIME")
 
@@ -136,6 +134,8 @@ def _draw_manual(layout, context) -> None:
         toggle.tag_name = name
         row.label(text=name)
         row.label(text=f"{count}/{total}")
+        remove = row.operator("batm.manual_remove_one", text="", icon="X")
+        remove.tag_name = name
     nav = box.row(align=True)
     nav.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").delta = -1
     nav.label(text=f"Page {page + 1} / {page_count} — {len(filtered)} Tags")
@@ -215,13 +215,24 @@ def _draw_sanitize(layout, context) -> None:
     if not props.sanitize_expanded:
         return
     box.label(text="Tag normalization applied before Preview", icon="INFO")
+    box.label(text="Basic", icon="DOT")
     box.prop(props, "sanitize_separators", text="Separators")
     box.prop(props, "sanitize_casing", text="Casing")
     box.prop(props, "sanitize_sort", text="Sort Alphabetically")
-    box.prop(props, "sanitize_max_length", text="Max Tag Length")
-    box.prop(props, "sanitize_remove_numbers", text="Remove Trailing Numbers")
-    box.prop(props, "sanitize_merge_synonyms", text="Merge Synonyms")
-    box.prop(props, "sanitize_blacklist", text="Blacklist (comma separated)")
+    box.prop(props, "sanitize_max_tags", text="Max Tags per Asset")
+    row = box.row()
+    row.prop(
+        props,
+        "sanitize_advanced_expanded",
+        text="Advanced",
+        icon="TRIA_DOWN" if props.sanitize_advanced_expanded else "TRIA_RIGHT",
+        emboss=False,
+    )
+    if props.sanitize_advanced_expanded:
+        box.prop(props, "sanitize_max_length", text="Max Tag Length (63 max)")
+        box.prop(props, "sanitize_remove_numbers", text="Remove Trailing Numbers")
+        box.prop(props, "sanitize_merge_synonyms", text="Merge Synonyms")
+        box.prop(props, "sanitize_blacklist", text="Blacklist (comma separated)")
 
 
 def _draw_review(layout, context) -> None:
@@ -315,11 +326,17 @@ def _draw_review(layout, context) -> None:
 
     changed = [state for state in SESSION.desired.values() if state.changed]
     invalid = [state for state in changed if not state.valid]
+    bulk = layout.row(align=True)
+    bulk.operator("batm.review_enable_all", text="Enable All", icon="CHECKBOX_HLT")
+    bulk.operator("batm.review_disable_all", text="Disable All", icon="CHECKBOX_DEHLT")
     controls = layout.row(align=True)
     controls.operator("batm.review_cancel", text="Discard Review", icon="TRASH")
     confirm = controls.row(align=True)
     confirm.enabled = bool(changed) and not invalid
     confirm.operator("batm.execute", text="Confirm and Apply", icon="CHECKMARK")
+    apply_valid = controls.row(align=True)
+    apply_valid.enabled = bool(changed) and bool(invalid)
+    apply_valid.operator("batm.review_apply_valid", text="Apply Valid Only", icon="FILTER")
     if invalid:
         layout.label(text=f"Resolve {len(invalid)} invalid assets before confirming", icon="ERROR")
 
@@ -329,17 +346,32 @@ def _draw_diagnostics(layout, context) -> None:
     backups = recoverable_backups()
     errors = [event for event in SESSION.messages if event.get("severity") == "ERROR"]
     warnings = [event for event in SESSION.messages if event.get("severity") == "WARNING"]
-    expanded = props.diagnostics_expanded or bool(errors) or bool(backups)
+    attention = bool(errors) or bool(backups)
     box = layout.box()
+    if attention:
+        box.label(text="Attention Needed", icon="ERROR")
+        box.label(text=f"Recoverable backups: {len(backups)}   Errors: {len(errors)}", icon="RECOVER_LAST")
+        if backups:
+            latest = backups[-1]
+            row = box.row(align=True)
+            restore = row.operator("batm.restore_backup", text="Restore Latest", icon="RECOVER_LAST")
+            restore.filepath = str(latest)
+            discard = box.row(align=True).operator("batm.discard_backup", text="Discard Latest", icon="TRASH")
+            discard.filepath = str(latest)
+        row = box.row(align=True)
+        row.operator("batm.export_log_text", text="Export Log", icon="TEXT")
+        row.operator("batm.export_diagnostics", text="Export Report", icon="EXPORT")
+        for event in (errors + warnings)[-3:]:
+            box.label(text=f"{event.get('code')}: {event.get('message')}", icon="ERROR")
     row = box.row()
     row.prop(
         props,
         "diagnostics_expanded",
-        text="Diagnostics & Logs",
-        icon="TRIA_DOWN" if expanded else "TRIA_RIGHT",
+        text="Technical Details",
+        icon="TRIA_DOWN" if props.diagnostics_expanded else "TRIA_RIGHT",
         emboss=False,
     )
-    if not expanded:
+    if not props.diagnostics_expanded:
         return
     library_label = active_library_label(context)
     blend_files = INVENTORY.blend_files_for(library_label)
@@ -359,18 +391,11 @@ def _draw_diagnostics(layout, context) -> None:
     box.label(text=f"Warnings: {len(warnings)}   Errors: {len(errors)}")
     for event in (errors + warnings)[-8:]:
         box.label(text=f"{event.get('code')}: {event.get('message')}", icon="ERROR")
-    if backups:
-        box.label(text=f"Recoverable Backups: {len(backups)}", icon="RECOVER_LAST")
-        latest = backups[-1]
-        row = box.row(align=True)
-        restore = row.operator("batm.restore_backup", text="Restore Latest", icon="RECOVER_LAST")
-        restore.filepath = str(latest)
-        discard = row.operator("batm.discard_backup", text="Discard", icon="TRASH")
-        discard.filepath = str(latest)
     row = box.row(align=True)
     row.operator("batm.export_diagnostics", text="Export Report", icon="EXPORT")
     row.operator("batm.export_log_text", text="Export Log", icon="TEXT")
-    row.operator("batm.refresh_browser", text="Refresh Browser", icon="FILE_REFRESH")
+    row.operator("batm.refresh_inventory", text="", icon="FILE_REFRESH")
+    row.operator("batm.refresh_browser", text="", icon="BLENDER")
 
 
 class BATM_PT_main(bpy.types.Panel):
@@ -395,7 +420,10 @@ class BATM_PT_main(bpy.types.Panel):
             # Run BATM (collapsible)
             run = layout.box()
             if _collapsible_header(run, props, "run_expanded", "Run BATM"):
+                run.prop(props, "asset_type_filter", text="Asset Type Filter")
                 run.operator("batm.run", text="Analyze and Review", icon="PLAY")
+                if props.last_summary:
+                    run.label(text=props.last_summary, icon="INFO")
                 run.label(text=props.status)
             # Manual Tag Editor
             _draw_manual(layout, context)

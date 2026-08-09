@@ -1,176 +1,131 @@
-"""BATM v3.x LTS — Phase 0: Asset Browser API investigation and validation.
+"""BATM Blender 5.x validation checklist.
 
-Run inside Blender 5.2's Python console with the Asset Browser open and a
-library selected:
+Paste this file into Blender's Python console with the Asset Browser open and
+a library selected:
 
     exec(open(r"C:\\...\\tools\\investigate_asset_browser.py").read())
 
-This script does NOT modify anything. It only prints information to validate
-the Asset Browser API surface used by BATM.
+The script prints one PASS/FAIL line per API contract BATM depends on. It
+modifies NOTHING. Copy the output and paste it into the chat.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import bpy
 
 
-def _safe_repr(value) -> str:
-    try:
-        return repr(value)
-    except Exception as exc:
-        return f"<repr failed: {exc}>"
+class Checklist:
+    """Collective PASS/FAIL reporter."""
 
+    def __init__(self) -> None:
+        self.total = 0
+        self.passed = 0
+        self.failed = 0
 
-def _safe_getattr(obj, name, default=None):
-    try:
-        return getattr(obj, name, default)
-    except Exception as exc:
-        return f"<error: {exc}>"
+    def run(self, label: str, ok: bool, detail: str = "") -> None:
+        self.total += 1
+        if ok:
+            self.passed += 1
+            print(f"  PASS  {label}" + (f"  ({detail})" if detail else ""))
+        else:
+            self.failed += 1
+            print(f"  FAIL  {label}" + (f"  ({detail})" if detail else ""))
 
 
 def investigate() -> None:
+    checks = Checklist()
     print("=" * 70)
-    print("BATM Phase 0 — Asset Browser Investigation")
+    print("BATM Blender 5.x validation checklist")
+    print(f"Blender: {bpy.app.version_string}")
     print("=" * 70)
 
-    # 1. Asset Browser editor context
-    print("\n--- 1. Asset Browser context ---")
-    for area in bpy.context.screen.areas:
-        if area.type != "FILE_BROWSER":
-            continue
-        space = area.spaces.active
-        print(f"  Area: {area.type}, browse_mode: {_safe_getattr(space, 'browse_mode')}")
-        params = _safe_getattr(space, "params")
-        print(f"  params type: {type(params)}")
-        if params is not None:
-            print(f"  params.asset_library_reference: {_safe_repr(_safe_getattr(params, 'asset_library_reference'))}")
-            print(f"  params.asset_library_reference type: {type(_safe_getattr(params, 'asset_library_reference'))}")
-            print(f"  params.asset_catalog_visibility: {_safe_repr(_safe_getattr(params, 'asset_catalog_visibility'))}")
-            print(f"  params.filter_asset_types: {_safe_repr(_safe_getattr(params, 'filter_asset_types'))}")
-            print(f"  params.filter_search: {_safe_repr(_safe_getattr(params, 'filter_search'))}")
-            print(f"  params.filter_id: {_safe_repr(_safe_getattr(params, 'filter_id'))}")
-            print(f"  params.filter_asset_library: {_safe_repr(_safe_getattr(params, 'filter_asset_library'))}")
-            print("  Relevant params attributes:")
-            for attr in dir(params):
-                if any(key in attr.lower() for key in ("asset", "catalog", "filter", "library")):
-                    try:
-                        value = getattr(params, attr)
-                        print(f"    {attr} = {_safe_repr(value)}")
-                    except Exception as exc:
-                        print(f"    {attr} = <error: {exc}>")
+    # 1. Asset Browser context.
+    print("\n[1] Asset Browser context")
+    spaces = [area.spaces.active for area in bpy.context.screen.areas if area.type == "FILE_BROWSER"]
+    checks.run("Asset Browser area exists", bool(spaces), f"found {len(spaces)}")
+    browse_mode = next((getattr(sp, "browse_mode", "") for sp in spaces if getattr(sp, "browse_mode", "")), "")
+    checks.run("browse_mode == ASSETS", browse_mode == "ASSETS", str(browse_mode))
+    params = next((getattr(sp, "params", None) for sp in spaces), None)
+    checks.run("space.params present", params is not None)
+    if params is not None:
+        ref = getattr(params, "asset_library_reference", None)
+        checks.run("params.asset_library_reference", ref is not None, str(ref))
+        checks.run("params.asset_catalog_visibility", hasattr(params, "asset_catalog_visibility"))
+        checks.run("params.filter_search", hasattr(params, "filter_search"))
+        checks.run("params.filter_asset_types", hasattr(params, "filter_asset_types"))
+    context_ref = getattr(bpy.context, "asset_library_reference", None)
+    checks.run("context.asset_library_reference", context_ref is not None, str(context_ref))
 
-    # 2. context.asset_library_reference
-    print("\n--- 2. context.asset_library_reference ---")
-    ref = _safe_getattr(bpy.context, "asset_library_reference")
-    print(f"  context.asset_library_reference: {_safe_repr(ref)}")
-    print(f"  type: {type(ref)}")
-    if ref is not None:
-        print(f"  dir(ref): {[a for a in dir(ref) if not a.startswith('_')]}")
-        for attr in dir(ref):
-            if not attr.startswith("_"):
-                try:
-                    print(f"    ref.{attr} = {_safe_repr(getattr(ref, attr))}")
-                except Exception as exc:
-                    print(f"    ref.{attr} = <error: {exc}>")
-
-    # 3. Registered libraries
-    print("\n--- 3. Libraries in preferences ---")
+    # 2. Libraries registered.
+    print("\n[2] Asset libraries")
     try:
-        libraries = bpy.context.preferences.filepaths.asset_libraries
-        print(f"  Library count: {len(libraries)}")
-        for i, lib in enumerate(libraries):
-            print(f"  [{i}] name={_safe_repr(lib.name)} path={_safe_repr(lib.path)}")
-            print(f"      type={type(lib)}")
-            for attr in dir(lib):
-                if not attr.startswith("_") and attr not in ("bl_rna", "rna_type"):
-                    try:
-                        print(f"      lib.{attr} = {_safe_repr(getattr(lib, attr))}")
-                    except Exception as exc:
-                        print(f"      lib.{attr} = <error: {exc}>")
+        libraries = list(bpy.context.preferences.filepaths.asset_libraries)
+        writable = 0
+        for lib in libraries:
+            root = Path(bpy.path.abspath(lib.path))
+            is_writable = root.is_dir() and os.access(root, os.W_OK)
+            if is_writable:
+                writable += 1
+            print(f"      library: {lib.name} -> {root}  writable={is_writable}")
+        checks.run("asset_libraries readable", True, f"{len(libraries)} registered")
+        checks.run("at least one writable user library", writable >= 1, f"writable={writable}")
     except Exception as exc:
-        print(f"  Error accessing asset_libraries: {exc}")
+        checks.run("asset_libraries readable", False, str(exc))
 
-    # 4. Selected assets
-    print("\n--- 4. Selected assets ---")
+    # 3. Selection / Asset Representation API.
+    print("\n[3] Selected assets contract")
     try:
         selected = list(bpy.context.selected_assets)
-        print(f"  Selected asset count: {len(selected)}")
-        for asset in selected[:5]:
-            print(f"  Asset: name={_safe_repr(asset.name)} id_type={_safe_repr(asset.id_type)}")
-            print(f"    full_library_path={_safe_repr(asset.full_library_path)}")
-            print(f"    full_path={_safe_repr(_safe_getattr(asset, 'full_path'))}")
-            print(f"    is_online={_safe_repr(_safe_getattr(asset, 'is_online'))}")
-            owner = _safe_getattr(asset, "owner_asset_library")
-            print(f"    owner_asset_library={_safe_repr(owner)}")
-            if owner is not None:
-                print(f"    owner type={type(owner)}")
-                for attr in dir(owner):
-                    if not attr.startswith("_"):
-                        try:
-                            print(f"      owner.{attr} = {_safe_repr(getattr(owner, attr))}")
-                        except Exception as exc:
-                            print(f"      owner.{attr} = <error: {exc}>")
-            local_id = _safe_getattr(asset, "local_id")
-            print(f"    local_id={_safe_repr(local_id)}")
-            metadata = _safe_getattr(asset, "metadata")
-            if metadata is not None:
-                print(f"    metadata.catalog_id={_safe_repr(_safe_getattr(metadata, 'catalog_id'))}")
-                print(f"    metadata.tags={_safe_repr([t.name for t in _safe_getattr(metadata, 'tags', [])])}")
+        checks.run("context.selected_assets iterable", True, f"{len(selected)} selected")
     except Exception as exc:
-        print(f"  Error accessing selected_assets: {exc}")
+        selected = []
+        checks.run("context.selected_assets iterable", False, str(exc))
+    asset = selected[0] if selected else None
+    checks.run(
+        "at least one asset selected (covers full pipeline)",
+        asset is not None,
+        "select assets to validate the full contract",
+    )
+    if asset is not None:
+        checks.run("asset.id_type", bool(getattr(asset, "id_type", "")), str(getattr(asset, "id_type", "")))
+        checks.run("asset.full_library_path", bool(getattr(asset, "full_library_path", "")))
+        checks.run("asset.owner_asset_library", getattr(asset, "owner_asset_library", None) is not None)
+        metadata = getattr(asset, "metadata", None)
+        checks.run("asset.metadata present", metadata is not None)
+        if metadata is not None:
+            tags = getattr(metadata, "tags", None)
+            checks.run(
+                "metadata.tags has add/clear API",
+                tags is not None and hasattr(tags, "add") and hasattr(tags, "clear"),
+            )
+            checks.run("metadata.tag has .name", all(hasattr(t, "name") for t in tags) if tags is not None else True)
+        local = getattr(asset, "local_id", None)
+        checks.run("asset.local_id", local is not None, str(getattr(local, "name", "") if local is not None else ""))
+        checks.run("asset.data datablock", getattr(asset, "data", None) is not None)
 
-    # 5. Active catalog
-    print("\n--- 5. Active catalog ---")
+    # 4. Write-path API availability (presence only, never executed).
+    print("\n[4] Write / refresh API surface (presence only)")
+    checks.run("bpy.ops.wm.save_as_mainfile", hasattr(bpy.ops.wm, "save_as_mainfile"))
+    checks.run("bpy.ops.asset.library_refresh", hasattr(bpy.ops.asset, "library_refresh"))
+    checks.run("bpy.app.timers.register", hasattr(bpy.app.timers, "register"))
+    checks.run("bpy.utils.user_resource", hasattr(bpy.utils, "user_resource"))
+
+    # 5. BATM storage root.
+    print("\n[5] BATM storage")
     try:
-        catalog = _safe_getattr(bpy.context, "asset_catalog")
-        print(f"  context.asset_catalog: {_safe_repr(catalog)}")
-        if catalog is not None:
-            print(f"  catalog type={type(catalog)}")
-            for attr in dir(catalog):
-                if not attr.startswith("_"):
-                    try:
-                        print(f"    catalog.{attr} = {_safe_repr(getattr(catalog, attr))}")
-                    except Exception as exc:
-                        print(f"    catalog.{attr} = <error: {exc}>")
+        base = bpy.utils.user_resource("SCRIPTS")
+        checks.run("Blender scripts user root", bool(base), str(base))
+        batm_dir = Path(base) / "addons" / "batm"
+        checks.run("BATM storage dir writable", batm_dir.is_dir() or os.access(base, os.W_OK), str(batm_dir))
     except Exception as exc:
-        print(f"  Error accessing asset_catalog: {exc}")
-
-    # 6. Inventory: count assets in the active library
-    print("\n--- 6. Active library inventory ---")
-    try:
-        active_ref = _safe_getattr(bpy.context, "asset_library_reference")
-        active_name = None
-        if active_ref is not None:
-            active_name = _safe_getattr(active_ref, "name")
-        print(f"  Active library (ref.name): {active_name}")
-
-        for lib in bpy.context.preferences.filepaths.asset_libraries:
-            import os
-            from pathlib import Path
-
-            root = Path(bpy.path.abspath(lib.path))
-            if not root.exists():
-                print(f"  {lib.name}: path does not exist ({root})")
-                continue
-            blend_files = list(root.rglob("*.blend"))
-            total_assets = 0
-            for blend in blend_files:
-                try:
-                    with bpy.data.libraries.load(str(blend), assets_only=True) as (data_from, _data_to):
-                        for attr in dir(data_from):
-                            if attr.startswith("_"):
-                                continue
-                            value = getattr(data_from, attr, None)
-                            if isinstance(value, list):
-                                total_assets += len(value)
-                except Exception as exc:
-                    print(f"    Error in {blend.name}: {exc}")
-            print(f"  {lib.name}: {len(blend_files)} .blend files, {total_assets} total assets")
-    except Exception as exc:
-        print(f"  Error in inventory: {exc}")
+        checks.run("BATM storage root", False, str(exc))
 
     print("\n" + "=" * 70)
-    print("Investigation complete. Copy this output and paste it into the chat.")
+    print(f"CHECKLIST: {checks.passed} PASS / {checks.failed} FAIL / {checks.total} total")
+    print("Paste this full output into the chat when validating BATM.")
     print("=" * 70)
 
 

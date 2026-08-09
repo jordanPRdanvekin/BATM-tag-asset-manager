@@ -12,6 +12,7 @@ import bpy
 
 from ..adapters.storage import atomic_json_write, ensure_dirs, read_json
 from ..core.models import AssetSnapshot, DesiredAssetState
+from .. import BATM_VERSION_STRING
 
 
 def _checksum(payload: dict[str, Any]) -> str:
@@ -41,7 +42,7 @@ def create_backup(
     payload: dict[str, Any] = {
         "schema_version": 1,
         "run_id": run_id,
-        "batm_version": "4.0.0",
+        "batm_version": BATM_VERSION_STRING,
         "blender_version": bpy.app.version_string,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "READY",

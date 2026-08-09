@@ -1,8 +1,13 @@
-"""Batch Asset Tag Manager 4.0.0 for Blender 5.2."""
+"""Batch Asset Tag Manager for Blender 5.2."""
 
 from __future__ import annotations
 
 import bpy
+
+# Single source of truth for the add-on version. The manifest
+# (blender_manifest.toml) is the packaging source and is synced manually.
+BATM_VERSION = (4, 0, 0)
+BATM_VERSION_STRING = ".".join(str(part) for part in BATM_VERSION)
 
 from .adapters.rule_store import load_active_rules
 from .adapters.storage import ensure_dirs
@@ -16,7 +21,7 @@ from .ui.properties import BATMRuntimeProperties, CLASSES as PROPERTY_CLASSES
 bl_info = {
     "name": "Batch Asset Tag Manager",
     "author": "Jordan Perez",
-    "version": (4, 0, 0),
+    "version": BATM_VERSION,
     "blender": (5, 2, 0),
     "location": "Asset Browser > Sidebar > BATM",
     "description": "Review and safely edit Asset Browser Tags in batches",

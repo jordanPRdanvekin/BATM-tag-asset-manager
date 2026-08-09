@@ -1,0 +1,29 @@
+name: Build release ZIP
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the installable ZIP
+        run: python tools/build_zip.py dist
+
+      - name: Attach ZIP to the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/batch_asset_tag_manager.zip
+          generate_release_notes: true

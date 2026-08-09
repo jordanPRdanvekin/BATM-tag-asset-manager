@@ -646,3 +646,40 @@ BATM no pretende reemplazar el Asset Browser de Blender ni convertirse en un ges
 Su propósito es ampliar las capacidades del sistema de etiquetas mediante herramientas de análisis, automatización y procesamiento masivo que permitan mantener bibliotecas organizadas de forma rápida, consistente y segura.
 
 Toda decisión de diseño debe reforzar esta idea: BATM es un motor especializado en la gestión inteligente de Tags, integrado de forma nativa con Blender 5.2 y construido para simplificar la organización de grandes bibliotecas de Assets sin alterar el flujo de trabajo habitual del usuario.
+05. Estado de Implementación y Conformidad (v4.0.0)
+
+Este archivo ES el SSOT de producto. El código implementado cumple todo lo definido arriba. Además quedan registradas las decisiones de diseño tomadas tras la auditoría para que el SSOT y el producto nunca divergan.
+
+Flujo real (implementado y verificado):
+
+Seleccionar Assets
+    ▼
+Run BATM (1 clic): fingerprint + AutoTag + Knowledge + Rules
+    ▼
+Sanitización (dedup + casing + separador + tope por asset)
+    ▼
+Preview editable (filtro, búsqueda, página, ON/OFF por asset, razones por tag)
+    ▼
+Confirm and Apply (1 clic): backup verificado -> workers -> verificación -> refresh
+    ▼
+Rollback automático verificado si falla o se cancela
+
+Decisiones de la auditoría (D1-D10) y de la iteración de minimalismo (E1-E7):
+
+- D1: Los facts jerárquicos (bone_names, constraint_types, parent_names, hierarchy_depth) son campos reales de regla; el Sanitizer limpia duplicados y limita el exceso de tags (cap configurable por asset).
+- D2: library_reference se restaura en el merge de workers (nunca se pierde). 
+- D3: Merge Synonyms se alimenta del Knowledge embebido.
+- D4: Manual Tag Editor con UNA lista unificada (búsqueda + paginación) y X por Tag = REMOVE en 1 clic, sin escribir.
+- D5: Un solo camino destructivo: Discard Review con confirmación; Clear Pending con confirmación.
+- D6: El Preview muestra la razón de cada Tag propuesto (Knowledge / Reglas / Manual).
+- D7: ETA real solo cuando la fase da progreso determinista; línea de resumen final tras cada run.
+- D8: Endurecimiento: Max Tag Length 63 (límite real de Blender), timeout por request configurable, poda de backups viejos, inventario con uuid único.
+- D9: Suite de tests offline en tests/ + docs/ (README, AUTOTAG_RULES, KNOWLEDGE) integradas al repo.
+- D10: Limpieza de código muerto (include_library_tag, tabs duplicadas, build_tag_index, tooltips falsos).
+- E1: Release automática de GitHub: el ZIP instalable se genera en cada tag con blender_manifest.toml en la raíz.
+- E2: Métricas compactas (solo lectura; el refresh vive en Diagnóstico).
+- E3: Sanitizer en Básico/Avanzado (las opciones comunes a la vista, avanzadas colapsadas).
+- E4: Review con acciones masivas 1-clic: Enable All / Disable All / Apply Valid Only.
+- E5: Diagnóstico priorizado: si hay errores o backups -> bloque "Attention Needed" con Restaurar/Exportar; Técnico colapsado.
+- E6: Versión única: BATM_VERSION en __init__.py; el manifest es la fuente de empaquetado.
+- E7: La única escritura del usuario es: añadir tags, reemplazar tags o buscar (Manual Tag Editor / Preview). Todo lo demás es clic.

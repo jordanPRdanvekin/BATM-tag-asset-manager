@@ -357,6 +357,30 @@ class BATM_OT_review_toggle_asset(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class BATM_OT_review_enable_all(bpy.types.Operator):
+    bl_idname = "batm.review_enable_all"
+    bl_label = "Enable All Assets"
+    bl_description = "Enable every asset in the Review in one click"
+
+    def execute(self, _context):
+        for state in SESSION.desired.values():
+            state.enabled = True
+        _sync_runtime(_context, f"Enabled all {len(SESSION.desired)} assets")
+        return {"FINISHED"}
+
+
+class BATM_OT_review_disable_all(bpy.types.Operator):
+    bl_idname = "batm.review_disable_all"
+    bl_label = "Disable All Assets"
+    bl_description = "Disable every asset in the Review in one click"
+
+    def execute(self, _context):
+        for state in SESSION.desired.values():
+            state.enabled = False
+        _sync_runtime(_context, "Disabled all assets")
+        return {"FINISHED"}
+
+
 class BATM_OT_review_select(bpy.types.Operator):
     bl_idname = "batm.review_select"
     bl_label = "Inspect Asset"
@@ -742,6 +766,10 @@ class BATM_OT_execute(bpy.types.Operator):
         SESSION.add_message("INFO", "EXECUTION_SUCCEEDED", "All approved Tags were saved and verified")
         delete_backup(SESSION.backup_path)
         self._persist_log(context, "SUCCEEDED")
+        _runtime(context).last_summary = (
+            f"Completed: {len(SESSION.snapshots)} assets, "
+            f"{sum(1 for state in SESSION.desired.values() if state.changed)} changed — verified"
+        )
         SESSION.set_phase("REFRESHING")
         refreshed = refresh_asset_browser(context)
         _finish_idle(context, "Completed and verified" + ("" if refreshed else "; refresh unavailable"), True)
@@ -760,6 +788,7 @@ class BATM_OT_execute(bpy.types.Operator):
         )
         delete_backup(SESSION.backup_path)
         self._persist_log(context, "RESTORED")
+        _runtime(context).last_summary = "Rollback completed: original Tags restored and verified"
         SESSION.set_phase("REFRESHING")
         refresh_asset_browser(context)
         _finish_idle(context, "Operation failed or was cancelled; rollback completed", True)
@@ -794,15 +823,33 @@ class BATM_OT_cancel_execution(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class BATM_OT_review_apply_valid(bpy.types.Operator):
+    bl_idname = "batm.review_apply_valid"
+    bl_label = "Apply Only Valid"
+    bl_description = (
+        "Disable every asset with warnings (the invalid ones) and confirm the remaining "
+        "valid changes in one click"
+    )
+
+    def execute(self, context):
+        for state in SESSION.desired.values():
+            if state.enabled and state.warnings:
+                state.enabled = False
+        return bpy.ops.batm.execute()
+
+
 CLASSES = (
     BATM_OT_run,
     BATM_OT_review_toggle_asset,
+    BATM_OT_review_enable_all,
+    BATM_OT_review_disable_all,
     BATM_OT_review_select,
     BATM_OT_review_add_tag,
     BATM_OT_review_remove_tag,
     BATM_OT_review_toggle_operation,
     BATM_OT_review_page,
     BATM_OT_review_cancel,
+    BATM_OT_review_apply_valid,
     BATM_OT_execute,
     BATM_OT_cancel_execution,
 )

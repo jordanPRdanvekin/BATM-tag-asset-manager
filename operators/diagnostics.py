@@ -18,6 +18,7 @@ from ..adapters.storage import atomic_json_write
 from ..adapters.worker_ipc import prepare_request
 from ..core.models import AssetKey
 from ..core.session import SESSION
+from .. import BATM_VERSION_STRING
 from ..engine.backup import delete_backup, recoverable_backups, update_backup_states, verify_backup
 from ..engine.fingerprint import fingerprint_file
 from ..engine.inventory import INVENTORY
@@ -68,7 +69,7 @@ class BATM_OT_export_diagnostics(bpy.types.Operator, ExportHelper):
         payload = {
             "schema_version": 1,
             "exported_at": datetime.now(timezone.utc).isoformat(),
-            "batm_version": "4.0.0",
+            "batm_version": BATM_VERSION_STRING,
             "blender_version": bpy.app.version_string,
             "phase": SESSION.phase,
             "run_id": SESSION.run_id,

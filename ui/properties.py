@@ -114,6 +114,11 @@ class BATMRuntimeProperties(bpy.types.PropertyGroup):
         default=False,
     )
     last_log_path: StringProperty(name="Last Log")
+    last_summary: StringProperty(
+        name="Last Result",
+        description="Summary of the most recent BATM operation (kept visible in the Run block)",
+        default="",
+    )
 
     # Collapsible top-level sections.
     metrics_expanded: BoolProperty(
@@ -150,6 +155,11 @@ class BATMRuntimeProperties(bpy.types.PropertyGroup):
     sanitize_expanded: BoolProperty(
         name="Sanitize Rules",
         description="Configure how Tags are normalized before the Preview is built",
+        default=False,
+    )
+    sanitize_advanced_expanded: BoolProperty(
+        name="Advanced",
+        description="Less common Sanitizer options (length limits, numbers, synonyms, blacklist)",
         default=False,
     )
     sanitize_separators: EnumProperty(

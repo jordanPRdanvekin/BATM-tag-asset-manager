@@ -82,6 +82,37 @@ class BATM_OT_toggle_tag_selection(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class BATM_OT_manual_remove_one(bpy.types.Operator):
+    """Queue a REMOVE for a single existing Tag across the selection."""
+
+    bl_idname = "batm.manual_remove_one"
+    bl_label = "Queue Remove One Tag"
+    bl_description = "Queue REMOVE of this Tag for every selected asset (1 click, no typing)"
+    bl_options = {"REGISTER"}
+
+    tag_name: StringProperty()
+
+    def execute(self, context):
+        targets = _targets(context)
+        if not targets or not self.tag_name.strip():
+            self.report({"WARNING"}, "Select assets with this Tag to remove it")
+            return {"CANCELLED"}
+        operation = TagOperation(
+            kind="REMOVE",
+            targets=targets,
+            values=[self.tag_name],
+            origin="MANUAL",
+            explanation=f"Manual Remove: {self.tag_name}",
+        )
+        if _is_duplicate(operation):
+            _runtime(context).status = "Already queued REMOVE for this Tag"
+            return {"FINISHED"}
+        SESSION.operations.append(operation)
+        _runtime(context).status = f"Queued Remove '{self.tag_name}' for {len(targets)} assets"
+        _recompile_review(context)
+        return {"FINISHED"}
+
+
 class BATM_OT_manual_remove(bpy.types.Operator):
     bl_idname = "batm.manual_remove"
     bl_label = "Queue Remove Selected Tags"
@@ -216,6 +247,7 @@ class BATM_OT_manual_tag_page(bpy.types.Operator):
 CLASSES = (
     BATM_OT_manual_add,
     BATM_OT_toggle_tag_selection,
+    BATM_OT_manual_remove_one,
     BATM_OT_manual_remove,
     BATM_OT_manual_replace,
     BATM_OT_clear_pending,
