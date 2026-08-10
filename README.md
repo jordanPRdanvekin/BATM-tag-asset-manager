@@ -42,19 +42,3 @@ rollback if anything fails.
 - `Worker Timeout`: seconds per request before a worker is killed.
 - `Review Page Size`, `Log Retention Days / Runs`.
 
-## Development
-
-Run the offline test-suite without Blender:
-
-```
-python tests/test_sanitizer.py
-python tests/test_extractors_contract.py
-python tests/test_autotag_pipeline.py
-python tests/test_knowledge.py
-python tests/test_scheduler.py
-python tests/test_rules_hierarchy.py
-python tests/test_ipc.py
-```
-
-All tests are pytest- and unittest-compatible plain asserts so they run in CI
-without external dependencies. See `docs/` for rules and knowledge schemas.
