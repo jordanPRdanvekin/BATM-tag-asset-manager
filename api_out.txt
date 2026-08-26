@@ -1,0 +1,30 @@
+== bpy.ops.asset.html ==
+  'library_refresh'                             True
+  'catalog_new'                                 True
+  'get_reference'                               False
+
+== bpy.types.AssetRepresentation.html ==
+  'full_library_path'                           True
+  'id_type'                                     True
+  'is_online'                                   True
+  'owner_asset_library'                         True
+  'local_id'                                    True
+  'name'                                        True
+
+== bpy.types.FileAssetSelectParams.html ==
+  'asset_library_reference'                     True
+  'asset_catalog_visibility'                    True
+
+== bpy.types.AssetLibraryReference.html ==
+  'name'                                        True
+
+== bpy.types.AssetMetaData.html ==
+  'tags'                                        True
+
+== bpy.types.BlendData.html ==
+  'all_ids'                                     True
+
+== bpy.ops.wm.html ==
+  'open_mainfile'                               True
+  'save_as_mainfile'                            True
+

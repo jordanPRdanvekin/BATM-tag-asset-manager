@@ -1,4 +1,4 @@
-BATM v4.x
+BATM v3.0
 Single Source of Truth (SSOT)
 01. Visión General
 ¿Qué es BATM?
@@ -646,7 +646,7 @@ BATM no pretende reemplazar el Asset Browser de Blender ni convertirse en un ges
 Su propósito es ampliar las capacidades del sistema de etiquetas mediante herramientas de análisis, automatización y procesamiento masivo que permitan mantener bibliotecas organizadas de forma rápida, consistente y segura.
 
 Toda decisión de diseño debe reforzar esta idea: BATM es un motor especializado en la gestión inteligente de Tags, integrado de forma nativa con Blender 5.2 y construido para simplificar la organización de grandes bibliotecas de Assets sin alterar el flujo de trabajo habitual del usuario.
-05. Estado de Implementación y Conformidad (v4.0.0)
+05. Estado de Implementación y Conformidad (3.0.0)
 
 Este archivo ES el SSOT de producto. El código implementado cumple todo lo definido arriba. Además quedan registradas las decisiones de diseño tomadas tras la auditoría para que el SSOT y el producto nunca divergan.
 
@@ -683,3 +683,71 @@ Decisiones de la auditoría (D1-D10) y de la iteración de minimalismo (E1-E7):
 - E5: Diagnóstico priorizado: si hay errores o backups -> bloque "Attention Needed" con Restaurar/Exportar; Técnico colapsado.
 - E6: Versión única: BATM_VERSION en __init__.py; el manifest es la fuente de empaquetado.
 - E7: La única escritura del usuario es: añadir tags, reemplazar tags o buscar (Manual Tag Editor / Preview). Todo lo demás es clic.
+- E8: Ciclo de vida saneado (auditoria): register() resetea el estado transitorio de la sesion (SessionController.reset) y unregister() cancela cualquier scheduler activo, evitando Reviews fantasma, snapshots obsoletos o workers colgados tras un reload (F8) o disable/enable. Sin cambios de comportamiento.
+- E9: Diagnostico centralizado (engine/logging.capture_exception): todo fallo recuperable se persiste en diagnostic_*.json con version del addon/Blender, archivo/funcion/linea, excepcion, traceback, operacion y fase activas. Nunca lanza y con fallback a archivo alternativo y stderr para que la gestion de errores no pueda encadenarse. Integrado en los paths de error de run (analisis/ejecucion/archivo-actual/rollback) y restore.
+
+- E10: Identidad de assets robusta (auditoria): find_local_id (blender_assets) y find_id (worker) priorizan el datablock propio del archivo (library is None) sobre datablocks vinculados homonimos en bpy.data.all_ids, evitando modificar un asset vinculado equivocado; con fallback al primer match para assets solo-vinculados.
+- E11: Rollback completo (auditoria): _begin_rollback restaura todos los workers INICIADOS (completed + failed), no solo los completed. Un APPLY que fracasa tras guardar quedaba modificado sin restaurar y con el backup borrado (falso exito/perdida). El worker RESTORE hace no-op si el archivo no se toco y error (backup retenido) si sus Tags no coinciden con ninguno de los dos estados.
+
+
+
+--------------------------------------------------------------
+06. Adiciones v3.0 (auditoria y diseno)
+
+D11 - Concept Catalog y MetaTags son dos motores separados.
+  MetaTags: hechos objetivos del asset (id_type, object_types presentes,
+  ContainsCamera/Light/Empty..., Biblioteca) con razon 'Metadata'. Se generan en
+  engine/metatags.py y se integran en build_autotag_operations.
+  Concept Catalog: resources/taxonomy.json (dominio a categoria a palabra),
+  deterministico y versionado; tags conceptuales en ingles con razon trazable.
+  La taxonomia activa es active_taxonomy() = bundle + overrides de usuario.
+
+D12 - Configuracion en Preferencias (AutoTag Settings):
+  - catalog_mode: CONCEPTS (solo conceptos/dominios principales, default) o
+    FULL (dominio + categoria coincidente).
+  - cross_tagging: inyecta la etiqueta del dominio ademas de la categoria (ON).
+  - Limite por asset (8) para evitar explosion de tags.
+
+D13 - Catalogo ampliado de forma selectiva y sin IA.
+  - No se anade 'skirn' (ejemplo no normativo).
+  - Contextualizacion por reglas explicitas (contextual_terms):
+    'child' a 'human' en contexto humano; a 'pup' en contexto fauna.
+  - Overrides de usuario persistidos en batm/user_taxonomy_override.json
+    (aliases, categorias, contextual_terms, auxiliary) sin tocar el bundle.
+  - Gestor en AddonPreferences colapsado (busqueda, filtro, alias, export/import).
+
+D14 - Segmentacion prudente (engine/segmenter.py).
+  - Solo descompone con evidencia lexica completa (palabras conocidas, todas las
+    piezas exactamente en el lexico); nunca inventa una frontera mediante una
+    pieza corregida/Levenshtein sobre un token continuo. Un compuesto sin
+    evidencia (ej. fireforce) o una palabra desconocida se conservan intactos.
+    Un separador explicito (fire_force) produce una unica Tag compuesta.
+    Opcion globaile sanitize_segment (Split Compound Words), default OFF.
+
+D15 - UX y errores corregidos.
+  - En Manual, Replace usa las Tags SELECCIONADAS (no se escribe el origen);
+    solo se introduce el destino con 'Replace selected with:'.
+  - Progreso nativo wm.progress (se elimino la barra custom del panel).
+  - Sin esquema verde/rojo; jerarquia por escala, espaciado y contraste.
+  - Preview por pasos (Step 1..4): anadir, remover, sanitizer, afinado por asset
+    y alcance por tipo de dato (filtra solo id_type nativo, ignora tags).
+  - rules.invoke robustece match_field frente a esquemas antiguos.
+
+D16 - Jerarquia UI y consolidacion de filtro (Phase 2).
+  - Orden estricto en el sidebar: METRICS -> ASSET TYPE FILTER -> RUN BATM ->
+    MANUAL -> SETTINGS -> DIAGNOSTICS.
+  - RUN BATM es SIEMPRE visible, ancho, grande y NUNCA plegable (se elimino
+    run_expanded). Todas las demas secciones (incluida Manual) son plegables.
+  - View y Asset Type Filter son UN solo sistema: un unico control en la zona
+    superior de contexto que es fuente unica de verdad para AutoTag, Review y
+    Manual (selected_asset_keys/snapshot_selection usan el mismo matcher).
+  - El filtro mantiene ALL / OBJECT / EMPTY / MATERIAL / CAMERA / LIGHT / ... .
+    OBJECT matchea todos los objetos; EMPTY/MESH/CAMERA/LIGHT matchean por
+    subtipo de objeto; COLLECTION/MATERIAL/WORLD/ACTION/NODETREE/GREASE_PENCIL
+    por id_type nativo.
+  - Subtipos de objeto se resuelven via local_id.type (assets materializados /
+    Current File). Los assets externos solo exponen el id_type OBJECT via la
+    API publica, por lo que un filtro de subtipo no puede seleccionarlos en el
+    analisis; se documenta la limitacion (no se inventan APIs privadas).
+  - GREASE_PENCIL se corrige como id_type real (antes no coincidia) y se anade
+    el enum EMPTY/MESH/CAMERA/LIGHT.
