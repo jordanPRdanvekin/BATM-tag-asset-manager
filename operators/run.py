@@ -1,4 +1,4 @@
-﻿"""Analysis, editable Review, execution and automatic rollback operators."""
+"""Analysis, editable Review, execution and automatic rollback operators."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import shutil
 import time
 
 import bpy
-from bpy.props import IntProperty, StringProperty
+from bpy.props import BoolProperty, IntProperty, StringProperty
 
 from ..adapters.blender_assets import (
     apply_current_file,
@@ -23,15 +23,17 @@ from ..adapters.blender_assets import (
 )
 from ..adapters.storage import prune_run_files
 from ..adapters.worker_ipc import prepare_request
-from ..core.models import AssetKey, DesiredAssetState, TagOperation
+from ..core.models import AssetKey, DesiredAssetState, TagOperation, merge_worker_facts
 from ..core.sanitizer import options_from_props
-from ..core.session import SESSION
+from ..core.session import SESSION, filtered_added_tags, filtered_final_tags
+from ..core.state_machine import InvalidTransition
 from ..engine.autotag import build_autotag_operations
 from ..engine.knowledge import load_knowledge
+from ..adapters.taxonomy_store import active_taxonomy
 from ..engine.backup import create_backup, delete_backup, prune_backups, update_backup_states
 from ..engine.fingerprint import fingerprint_file, fingerprints_match
-from ..engine.logging import persist_run_log, prune_logs
-from ..engine.scheduler import BatchScheduler, adaptive_worker_count
+from ..engine.logging import capture_exception, persist_run_log, prune_logs
+from ..engine.scheduler import BatchScheduler, adaptive_worker_count, analysis_batch_plan
 
 
 def _runtime(context):
@@ -64,6 +66,24 @@ def _finish_idle(context, status: str, clear_operations: bool = False) -> None:
     if clear_operations:
         SESSION.operations.clear()
         SESSION.selected_tags.clear()
+    _sync_runtime(context, status)
+    _runtime(context).progress = 0.0
+
+
+def _safe_idle(context, status: str) -> None:
+    """Return the session to IDLE after an abnormal exit.
+
+    Used when the normal phase flow cannot complete (e.g. the scheduler vanished
+    because the add-on was disabled mid-run), so the session never gets stuck in
+    a phase that blocks the next run.
+    """
+    try:
+        if SESSION.phase in ("EXECUTING", "RESTORING"):
+            SESSION.set_phase("FAILED")
+        if SESSION.phase != "IDLE":
+            SESSION.set_phase("IDLE")
+    except InvalidTransition:
+        SESSION.phase = "IDLE"
     _sync_runtime(context, status)
     _runtime(context).progress = 0.0
 
@@ -140,8 +160,7 @@ class BATM_OT_run(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            asset_type_filter = _runtime(context).asset_type_filter
-            snapshots = snapshot_selection(context, asset_type_filter, defer_fingerprints=True)
+            snapshots = snapshot_selection(context, defer_fingerprints=True)
             if not snapshots:
                 self.report({"WARNING"}, "Select at least one Asset Browser asset")
                 return {"CANCELLED"}
@@ -181,6 +200,14 @@ class BATM_OT_run(bpy.types.Operator):
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
         except Exception as exc:
+            capture_exception(
+                code="ANALYSIS_SETUP_FAILED",
+                message=str(exc),
+                operation="run analysis",
+                phase=SESSION.phase,
+                context="BATM_OT_run.execute",
+                exc=exc,
+            )
             if SESSION.phase == "ANALYZING":
                 SESSION.set_phase("FAILED")
                 SESSION.add_message("ERROR", "ANALYSIS_SETUP_FAILED", str(exc))
@@ -191,7 +218,14 @@ class BATM_OT_run(bpy.types.Operator):
             return {"CANCELLED"}
 
     def _start_analysis(self, context) -> bool:
-        """Group snapshots by .blend and dispatch ANALYZE workers. False when idle."""
+        """Group snapshots by .blend and dispatch ANALYZE workers.
+
+        Files are batched into a bounded number of prepared requests so a large
+        selection does not spawn one headless Blender subprocess per .blend file
+        (hundreds of boots would stall the run and can exhaust memory — the cause
+        of the reported long load times and silent freezes/crashes). Each worker
+        opens its assigned files sequentially inside a single process.
+        """
         current_path = str(Path(bpy.data.filepath).resolve()) if bpy.data.filepath else ""
         grouped: dict[str, list] = defaultdict(list)
         for snapshot in SESSION.snapshots.values():
@@ -201,30 +235,48 @@ class BATM_OT_run(bpy.types.Operator):
                 SESSION.add_message(
                     "WARNING", "ASSET_EXCLUDED", snapshot.excluded_reason, asset=snapshot.key.to_dict()
                 )
+        if not grouped:
+            self._finish_analysis(context)
+            return False
+        prefs = batm_preferences(context)
+        limit = int(getattr(prefs, "max_workers", 4))
+        file_items = sorted(grouped.items())
+        # Batch files into worker requests (see analysis_batch_plan) so a large
+        # selection does not spawn one headless Blender subprocess per file.
         prepared = []
-        for index, (path, items) in enumerate(sorted(grouped.items())):
+        for index, (start, size) in enumerate(analysis_batch_plan(len(file_items), limit)):
+            chunk = file_items[start : start + size]
             prepared.append(
                 prepare_request(
                     SESSION.run_id,
                     index,
                     {
                         "mode": "ANALYZE",
-                        "blend_path": path,
-                        "fingerprint": items[0].fingerprint,
-                        "assets": _worker_assets(items),
+                        "files": [
+                            {
+                                "blend_path": path,
+                                "fingerprint": items[0].fingerprint,
+                                "assets": _worker_assets(items),
+                            }
+                            for path, items in chunk
+                        ],
                     },
                     timeout_seconds=_worker_timeout(context),
                 )
             )
-        if not prepared:
-            self._finish_analysis(context)
-            return False
-        prefs = batm_preferences(context)
-        limit = int(getattr(prefs, "max_workers", 4))
         SESSION.scheduler = BatchScheduler(prepared, adaptive_worker_count(len(prepared), limit))
         SESSION.scheduler.start_available()
         _sync_runtime(context, "Analyzing assets...")
         return True
+
+    def _abort_modal(self, context, status: str):
+        """Safe exit when the scheduler vanished (e.g. add-on disabled mid-run)."""
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        context.window_manager.progress_end()
+        _safe_idle(context, status)
+        return {"CANCELLED"}
 
     def _hash_modal(self, context):
         if self._hash_paths:
@@ -261,16 +313,27 @@ class BATM_OT_run(bpy.types.Operator):
             self._hash_paths = []
             self._hashing = False
             SESSION.add_message("WARNING", "ANALYSIS_CANCELLED", "Analysis cancelled by user")
+            if self._timer is not None:
+                context.window_manager.event_timer_remove(self._timer)
+                self._timer = None
             context.window_manager.progress_end()
             _finish_idle(context, "Analysis cancelled")
             return {"CANCELLED"}
         if event.type == "TIMER" and self._hashing:
             return self._hash_modal(context)
         scheduler = SESSION.scheduler
-        if event.type == "ESC" and scheduler:
+        # The scheduler is legitimately None while deferred fingerprinting is still
+        # running: _start_analysis() (which populates SESSION.scheduler) is only
+        # called once hashing completes. Without this guard, the first non-TIMER
+        # event received after entering the modal (e.g. the mouse click that
+        # triggered the operator) would hit this abort check during hashing and
+        # every run requiring a fingerprint would abort with "Analysis interrupted".
+        if scheduler is None and not self._hashing:
+            return self._abort_modal(context, "Analysis interrupted")
+        if event.type == "ESC":
             scheduler.cancel()
             _runtime(context).status = "Cancelling analysis..."
-        if event.type != "TIMER" or scheduler is None:
+        if event.type != "TIMER":
             return {"PASS_THROUGH"}
         scheduler.poll()
         total = max(1, scheduler.total)
@@ -283,7 +346,7 @@ class BATM_OT_run(bpy.types.Operator):
             0.40 + asset_fraction * 0.55,
             (
                 f"Assets verified: {scheduler.confirmed_assets}/{scheduler.total_assets}  "
-                f"Files: {scheduler.confirmed}/{total}  Failed: {len(scheduler.failed)}"
+                f"Worker jobs: {scheduler.confirmed}/{total}  Failed: {len(scheduler.failed)}"
             ),
         )
         context.window_manager.progress_update(_runtime(context).progress * 100)
@@ -315,21 +378,29 @@ class BATM_OT_run(bpy.types.Operator):
             return {"CANCELLED"}
         for completed in scheduler.completed:
             result = completed["result"]
+            for error in result.get("errors", []):
+                SESSION.add_message("WARNING", "ANALYZE_FILE_SKIPPED", error)
             for value in result.get("assets", []):
                 key = AssetKey.from_dict(value["key"])
                 snapshot = SESSION.snapshots.get(key.token)
                 if snapshot:
                     snapshot.tags = [str(tag) for tag in value.get("tags", [])]
-                    snapshot.facts.update(value.get("facts", {}))
-                    snapshot.facts["library_reference"] = snapshot.key.library_reference
+                    merge_worker_facts(snapshot, value.get("facts", {}))
         self._finish_analysis(context)
         return {"FINISHED"}
 
     def _finish_analysis(self, context) -> None:
         _sync_runtime(context, "Building Preview...")
         SESSION.operations = [operation for operation in SESSION.operations if operation.origin != "AUTO"]
+        prefs = batm_preferences(context)
         SESSION.operations.extend(
-            build_autotag_operations(list(SESSION.snapshots.values()), SESSION.rules, load_knowledge())
+            build_autotag_operations(
+                list(SESSION.snapshots.values())
+                , SESSION.rules
+                , load_knowledge()
+                , taxonomy=active_taxonomy()
+                , tax_options={ "catalog_mode": getattr(prefs, "catalog_mode", "CONCEPTS"), "cross_tagging": getattr(prefs, "cross_tagging", True) }
+            )
         )
         SESSION.sanitize_options = options_from_props(_runtime(context))
         SESSION.compile()
@@ -348,6 +419,7 @@ class BATM_OT_run(bpy.types.Operator):
 class BATM_OT_review_toggle_asset(bpy.types.Operator):
     bl_idname = "batm.review_toggle_asset"
     bl_label = "Enable / Disable Asset"
+    bl_description = "Enable or disable this asset in the Review without writing any change"
     token: StringProperty()
 
     def execute(self, _context):
@@ -359,31 +431,42 @@ class BATM_OT_review_toggle_asset(bpy.types.Operator):
 
 class BATM_OT_review_enable_all(bpy.types.Operator):
     bl_idname = "batm.review_enable_all"
-    bl_label = "Enable All Assets"
-    bl_description = "Enable every asset in the Review in one click"
+    bl_label = "Enable All Steps"
+    bl_description = "Turn on every Review step (Add, Remove, Cleanup, Last Step) in one click"
 
-    def execute(self, _context):
-        for state in SESSION.desired.values():
-            state.enabled = True
-        _sync_runtime(_context, f"Enabled all {len(SESSION.desired)} assets")
+    def execute(self, context):
+        props = _runtime(context)
+        props.review_add_on = True
+        props.review_remove_on = True
+        props.review_cleanup_on = True
+        props.review_assets_on = True
+        SESSION.sanitize_options = options_from_props(props)
+        SESSION.recompile_preserving_disabled()
+        _sync_runtime(context, "Enabled all Review steps")
         return {"FINISHED"}
 
 
 class BATM_OT_review_disable_all(bpy.types.Operator):
     bl_idname = "batm.review_disable_all"
-    bl_label = "Disable All Assets"
-    bl_description = "Disable every asset in the Review in one click"
+    bl_label = "Disable All Steps"
+    bl_description = "Turn off every Review step (Add, Remove, Cleanup, Last Step) in one click"
 
-    def execute(self, _context):
-        for state in SESSION.desired.values():
-            state.enabled = False
-        _sync_runtime(_context, "Disabled all assets")
+    def execute(self, context):
+        props = _runtime(context)
+        props.review_add_on = False
+        props.review_remove_on = False
+        props.review_cleanup_on = False
+        props.review_assets_on = False
+        SESSION.sanitize_options = options_from_props(props)
+        SESSION.recompile_preserving_disabled()
+        _sync_runtime(context, "Disabled all Review steps")
         return {"FINISHED"}
 
 
 class BATM_OT_review_select(bpy.types.Operator):
     bl_idname = "batm.review_select"
     bl_label = "Inspect Asset"
+    bl_description = "Show the full Before/After Tags and reasons for this asset in the Review"
     token: StringProperty()
 
     def execute(self, _context):
@@ -394,6 +477,7 @@ class BATM_OT_review_select(bpy.types.Operator):
 class BATM_OT_review_add_tag(bpy.types.Operator):
     bl_idname = "batm.review_add_tag"
     bl_label = "Add Review Tag"
+    bl_description = "Propose adding a Tag to this single asset in the Review (queued, not written)"
     token: StringProperty()
     value: StringProperty(name="Tag")
 
@@ -420,6 +504,7 @@ class BATM_OT_review_add_tag(bpy.types.Operator):
 class BATM_OT_review_remove_tag(bpy.types.Operator):
     bl_idname = "batm.review_remove_tag"
     bl_label = "Remove Review Tag"
+    bl_description = "Propose removing this Tag from the single asset in the Review (queued, not written)"
     token: StringProperty()
     value: StringProperty()
 
@@ -440,22 +525,145 @@ class BATM_OT_review_remove_tag(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class BATM_OT_review_toggle_operation(bpy.types.Operator):
-    bl_idname = "batm.review_toggle_operation"
-    bl_label = "Enable / Disable Operation"
-    index: IntProperty()
+class BATM_OT_review_remove_added(bpy.types.Operator):
+    """Drop a proposed Tag so it is no longer added to any asset."""
+
+    bl_idname = "batm.review_remove_added"
+    bl_label = "Do Not Add This Tag"
+    bl_description = "Exclude this proposed Tag from every asset that would add it (Add-step; independent of Remove)"
+    value: StringProperty()
 
     def execute(self, context):
-        if 0 <= self.index < len(SESSION.operations):
-            SESSION.operations[self.index].enabled = not SESSION.operations[self.index].enabled
-            SESSION.recompile_preserving_disabled()
-            _sync_runtime(context, "Review operation updated")
+        key = self.value.casefold()
+        targets = [
+            token
+            for token, state in SESSION.desired.items()
+            if any(tag.casefold() == key for tag in state.added)
+        ]
+        if not targets:
+            return {"CANCELLED"}
+        # Add-step exclusion: block the proposed Tag from being added. This is an
+        # Add concept, so it is effective even when the Remove step is OFF, and it
+        # does not touch Tags that already exist on an asset.
+        SESSION.operations.append(TagOperation(
+            kind="CANCEL_ADD", targets=targets, values=[self.value], origin="PREVIEW",
+            explanation="Do not add proposed Tag",
+        ))
+        SESSION.recompile_preserving_disabled()
+        context.window_manager.batm_runtime.status = "Proposed Tag will not be added"
+        return {"FINISHED"}
+
+
+class BATM_OT_review_add_tag_edit(bpy.types.Operator):
+    """Rewrite a proposed Add Tag across every asset that would add it."""
+
+    bl_idname = "batm.review_add_tag_edit"
+    bl_label = "Edit Proposed Tag"
+    bl_description = "Rewrite this proposed Tag on every asset that would add it (double-click a Tag, or use the pencil)"
+    bl_options = {"REGISTER"}
+
+    value: StringProperty(name="Current Tag")
+    new_value: StringProperty(name="New Tag", description="Replacement text for this proposed Tag")
+    # When True (pencil button), the edit dialog opens on a single click.
+    force: BoolProperty(default=False)
+
+    # Class-level double-click detection: two invocations of the same Tag within
+    # a short window count as a double-click (the pencil button bypasses this).
+    _last_double: tuple[str, float] = ("", 0.0)
+
+    def invoke(self, context, event):
+        now = time.monotonic()
+        key = self.value.casefold().strip()
+        is_double = (
+            bool(key)
+            and key == self.__class__._last_double[0]
+            and (now - self.__class__._last_double[1]) <= 0.38
+        )
+        self.__class__._last_double = (key, now)
+        if not self.force and not is_double:
+            self.report({"INFO"}, "Double-click a Tag to rename it")
+            return {"CANCELLED"}
+        self.new_value = self.value
+        return context.window_manager.invoke_props_dialog(self, width=460)
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.prop(self, "value", text="Current")
+        layout.prop(self, "new_value", text="New Tag")
+
+    def execute(self, context):
+        new_value = self.new_value.strip()
+        if not new_value:
+            self.report({"WARNING"}, "Enter a replacement Tag")
+            return {"CANCELLED"}
+        if new_value.casefold() == self.value.casefold():
+            return {"CANCELLED"}
+        key = self.value.casefold()
+        targets = [
+            token
+            for token, state in SESSION.desired.items()
+            if any(tag.casefold() == key for tag in state.added)
+        ]
+        if not targets:
+            self.report({"WARNING"}, "No assets would add this Tag")
+            return {"CANCELLED"}
+        # Implemented as two Add-step operations (no Remove step required):
+        #  1) CANCEL_ADD the old proposed value (dropped from newly-added Tags),
+        #  2) ADD the new value verbatim (exact text the user typed).
+        SESSION.operations.append(
+            TagOperation(
+                kind="CANCEL_ADD",
+                targets=targets,
+                values=[self.value],
+                origin="PREVIEW",
+                explanation="Rename proposed Tag (remove old value)",
+            )
+        )
+        SESSION.operations.append(
+            TagOperation(
+                kind="ADD",
+                targets=targets,
+                values=[new_value],
+                origin="PREVIEW",
+                verbatim=True,
+                explanation=f"Rename proposed Tag: {self.value} -> {new_value}",
+            )
+        )
+        SESSION.recompile_preserving_disabled()
+        context.window_manager.batm_runtime.status = f"Renamed Tag for {len(targets)} assets"
+        return {"FINISHED"}
+
+
+class BATM_OT_review_remove_tag_value(bpy.types.Operator):
+    """Queue removal of an existing Tag across every affected asset."""
+
+    bl_idname = "batm.review_remove_tag_value"
+    bl_label = "Remove This Tag"
+    bl_description = "Queue the removal of this Tag on every asset that currently has it"
+    value: StringProperty()
+
+    def execute(self, context):
+        key = self.value.casefold()
+        targets = [
+            token
+            for token, state in SESSION.desired.items()
+            if any(tag.casefold() == key for tag in state.before)
+        ]
+        if not targets:
+            return {"CANCELLED"}
+        SESSION.operations.append(TagOperation(
+            kind="REMOVE", targets=targets, values=[self.value], origin="PREVIEW",
+            explanation="Review Remove",
+        ))
+        SESSION.recompile_preserving_disabled()
+        context.window_manager.batm_runtime.status = f"Removal queued for {len(targets)} assets"
         return {"FINISHED"}
 
 
 class BATM_OT_review_page(bpy.types.Operator):
     bl_idname = "batm.review_page"
     bl_label = "Review Page"
+    bl_description = "Move through the paginated per-asset Review list"
     delta: IntProperty()
 
     def execute(self, context):
@@ -468,6 +676,64 @@ class BATM_OT_review_page(bpy.types.Operator):
         page_count = max(1, math.ceil(len(states) / page_size))
         proposed = props.review_page + self.delta
         props.review_page = max(0, min(proposed, page_count - 1))
+        return {"FINISHED"}
+
+
+class BATM_OT_review_add_page(bpy.types.Operator):
+    """Move through the proposed Add Tags: first / previous / next / last page."""
+
+    bl_idname = "batm.review_add_page"
+    bl_label = "Add Tags Page"
+    bl_description = "Browse the proposed Add Tags page by page (first / previous / next / last)"
+    action: StringProperty()
+
+    def execute(self, context):
+        props = _runtime(context)
+        page_size = max(1, int(props.review_add_page_size))
+        items = filtered_added_tags(
+            list(SESSION.desired.values()),
+            search=props.review_add_search,
+            length=props.tag_length_filter,
+        )
+        page_count = max(1, math.ceil(max(1, len(items)) / page_size))
+        current = props.review_add_page
+        if self.action == "FIRST":
+            props.review_add_page = 0
+        elif self.action == "LAST":
+            props.review_add_page = page_count - 1
+        elif self.action == "PREV":
+            props.review_add_page = max(0, current - 1)
+        elif self.action == "NEXT":
+            props.review_add_page = min(page_count - 1, current + 1)
+        return {"FINISHED"}
+
+
+class BATM_OT_review_final_page(bpy.types.Operator):
+    """Move through the Final Tags preview: first / previous / next / last page."""
+
+    bl_idname = "batm.review_final_page"
+    bl_label = "Final Tags Page"
+    bl_description = "Browse the Final Tags preview page by page (first / previous / next / last)"
+    action: StringProperty()
+
+    def execute(self, context):
+        props = _runtime(context)
+        page_size = max(1, int(props.review_add_page_size))
+        items = filtered_final_tags(
+            list(SESSION.desired.values()),
+            search=props.review_add_search,
+            length=props.tag_length_filter,
+        )
+        page_count = max(1, math.ceil(max(1, len(items)) / page_size))
+        current = props.review_final_page
+        if self.action == "FIRST":
+            props.review_final_page = 0
+        elif self.action == "LAST":
+            props.review_final_page = page_count - 1
+        elif self.action == "PREV":
+            props.review_final_page = max(0, current - 1)
+        elif self.action == "NEXT":
+            props.review_final_page = min(page_count - 1, current + 1)
         return {"FINISHED"}
 
 
@@ -574,6 +840,14 @@ class BATM_OT_execute(bpy.types.Operator):
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
         except Exception as exc:
+            capture_exception(
+                code="EXECUTION_SETUP_FAILED",
+                message=str(exc),
+                operation="apply execute",
+                phase=SESSION.phase,
+                context="BATM_OT_execute.execute",
+                exc=exc,
+            )
             SESSION.add_message("ERROR", "EXECUTION_SETUP_FAILED", str(exc))
             if SESSION.scheduler is not None:
                 SESSION.scheduler.cancel()
@@ -587,10 +861,12 @@ class BATM_OT_execute(bpy.types.Operator):
 
     def modal(self, context, event):
         scheduler = SESSION.scheduler
-        if event.type == "ESC" and self._mode == "APPLY" and scheduler:
+        if scheduler is None:
+            return self._abort_modal(context, "Execution interrupted; recovery backup retained")
+        if event.type == "ESC" and self._mode == "APPLY":
             scheduler.cancel()
             _runtime(context).status = "Cancellation requested; waiting for safe rollback..."
-        if event.type != "TIMER" or scheduler is None:
+        if event.type != "TIMER":
             return {"PASS_THROUGH"}
         scheduler.poll()
         _runtime(context).progress = scheduler.confirmed_assets / max(1, scheduler.total_assets)
@@ -662,12 +938,32 @@ class BATM_OT_execute(bpy.types.Operator):
                     )
             return self._finish_success(context)
         except Exception as exc:
+            capture_exception(
+                code="CURRENT_FILE_FAILED",
+                message=str(exc),
+                operation="apply current file",
+                phase=SESSION.phase,
+                context="BATM_OT_execute._apply_current_and_finish",
+                exc=exc,
+            )
             SESSION.add_message("ERROR", "CURRENT_FILE_FAILED", str(exc))
             return self._begin_rollback(context, cancelled=False)
 
     def _begin_rollback(self, context, cancelled: bool):
         scheduler = SESSION.scheduler
-        completed = list(scheduler.completed) if scheduler else []
+        # Restore every job that may have written its file — the clearly-successful
+        # ones AND the started-but-failed ones. A started APPLY worker that fails
+        # after saving (or is killed right after the save) leaves the file modified
+        # but is recorded in `failed`, not `completed`; restoring only `completed`
+        # would leave that file modified while `_finish_restored` deletes the backup
+        # and reports "restore verified" (false success / data loss). Because
+        # rollback only runs once the scheduler is `done` (no process is mid-write),
+        # it is safe to include `failed`. Each RESTORE worker guards by tag
+        # comparison: an untouched file (current == original == desired) is a no-op,
+        # a file matching the applied state is restored and verified, and a file
+        # whose current Tags match neither state raises instead of being overwritten
+        # (no false restore).
+        started = (list(scheduler.completed) + list(scheduler.failed)) if scheduler else []
         completed_paths = _completed_paths(scheduler)
         if completed_paths:
             update_backup_states(SESSION.backup_path, completed_paths, "APPLIED")
@@ -679,9 +975,9 @@ class BATM_OT_execute(bpy.types.Operator):
         )
         restore_jobs = []
         rollback_run_id = f"{SESSION.run_id}-rollback"
-        for index, completed_job in enumerate(completed):
-            request = completed_job["prepared"]["request"]
-            result = completed_job["result"]
+        for index, started_job in enumerate(started):
+            request = started_job["prepared"]["request"]
+            result = started_job["result"]
             restore_jobs.append(
                 prepare_request(
                     rollback_run_id,
@@ -724,6 +1020,14 @@ class BATM_OT_execute(bpy.types.Operator):
                         asset=state.key.to_dict(),
                     )
         except Exception as exc:
+            capture_exception(
+                code="CURRENT_ROLLBACK_FAILED",
+                message=str(exc),
+                operation="rollback current file",
+                phase=SESSION.phase,
+                context="BATM_OT_execute._begin_rollback",
+                exc=exc,
+            )
             SESSION.add_message("ERROR", "CURRENT_ROLLBACK_FAILED", str(exc))
             return self._finish_restore_failed(context)
         if not restore_jobs:
@@ -736,27 +1040,46 @@ class BATM_OT_execute(bpy.types.Operator):
         _sync_runtime(context, "Rolling back completed files...")
         return {"RUNNING_MODAL"}
 
+    def _abort_modal(self, context, status: str):
+        """Safe exit when the scheduler vanished (e.g. add-on disabled mid-run)."""
+        self._remove_timer(context)
+        context.window_manager.progress_end()
+        _safe_idle(context, status)
+        return {"CANCELLED"}
+
     def _remove_timer(self, context) -> None:
         if self._timer is not None:
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
 
     def _persist_log(self, context, outcome: str) -> None:
-        path = persist_run_log(
-            SESSION.run_id,
-            SESSION.messages,
-            {
-                "outcome": outcome,
-                "selected_assets": len(SESSION.snapshots),
-                "changed_assets": sum(1 for state in SESSION.desired.values() if state.changed),
-            },
-        )
-        _runtime(context).last_log_path = str(path)
-        prefs = batm_preferences(context)
-        prune_logs(
-            int(getattr(prefs, "log_retention_days", 30)),
-            int(getattr(prefs, "log_retention_runs", 50)),
-        )
+        # Logging is best effort: a persistence failure must never cascade into
+        # a rollback of an otherwise completed run.
+        try:
+            path = persist_run_log(
+                SESSION.run_id,
+                SESSION.messages,
+                {
+                    "outcome": outcome,
+                    "selected_assets": len(SESSION.snapshots),
+                    "changed_assets": sum(1 for state in SESSION.desired.values() if state.changed),
+                },
+            )
+            _runtime(context).last_log_path = str(path)
+            prefs = batm_preferences(context)
+            prune_logs(
+                int(getattr(prefs, "log_retention_days", 30)),
+                int(getattr(prefs, "log_retention_runs", 50)),
+            )
+        except Exception as exc:
+            capture_exception(
+                code="LOG_PERSIST_FAILED",
+                message=str(exc),
+                operation="persist run log",
+                phase=SESSION.phase,
+                context="BATM_OT_execute._persist_log",
+                exc=exc,
+            )
 
     def _finish_success(self, context):
         self._remove_timer(context)
@@ -812,6 +1135,7 @@ class BATM_OT_execute(bpy.types.Operator):
 class BATM_OT_cancel_execution(bpy.types.Operator):
     bl_idname = "batm.cancel_execution"
     bl_label = "Cancel and Roll Back"
+    bl_description = "Stop the current run and restore every file already written from the verified backup"
 
     @classmethod
     def poll(cls, _context):
@@ -835,7 +1159,25 @@ class BATM_OT_review_apply_valid(bpy.types.Operator):
         for state in SESSION.desired.values():
             if state.enabled and state.warnings:
                 state.enabled = False
+        if not any(state.changed for state in SESSION.desired.values()):
+            self.report({"WARNING"}, "No valid assets left to apply")
+            return {"CANCELLED"}
         return bpy.ops.batm.execute()
+
+
+class BATM_OT_review_step(bpy.types.Operator):
+    bl_idname = "batm.review_step"
+    bl_label = "Review Step"
+    bl_description = "Switch between the Review steps: Add, Remove, Cleanup and Last Step"
+    value: StringProperty()
+
+    @classmethod
+    def poll(cls, context):
+        return SESSION.phase == "REVIEW_READY"
+
+    def execute(self, context):
+        context.window_manager.batm_runtime.review_step = self.value
+        return {"FINISHED"}
 
 
 CLASSES = (
@@ -846,10 +1188,15 @@ CLASSES = (
     BATM_OT_review_select,
     BATM_OT_review_add_tag,
     BATM_OT_review_remove_tag,
-    BATM_OT_review_toggle_operation,
+    BATM_OT_review_remove_added,
+    BATM_OT_review_add_tag_edit,
+    BATM_OT_review_remove_tag_value,
     BATM_OT_review_page,
+    BATM_OT_review_add_page,
+    BATM_OT_review_final_page,
     BATM_OT_review_cancel,
     BATM_OT_review_apply_valid,
     BATM_OT_execute,
     BATM_OT_cancel_execution,
+    BATM_OT_review_step,
 )

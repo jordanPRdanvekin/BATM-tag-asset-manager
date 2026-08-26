@@ -4,59 +4,103 @@
   "groups": [
     {
       "tag": "Wood",
-      "words": ["oak", "maple", "pine", "walnut", "birch", "spruce", "cedar", "beech", "plank", "timber", "plywood", "teak"]
+      "words": ["oak", "maple", "pine", "walnut", "birch", "spruce", "cedar", "beech", "plank", "timber", "plywood", "teak", "elm", "ash", "cherry", "mahogany", "poplar", "alder"]
     },
     {
       "tag": "Metal",
-      "words": ["steel", "iron", "aluminum", "aluminium", "brass", "bronze", "copper", "chrome", "stainless", "titanium", "nickel", "zinc"]
+      "words": ["steel", "iron", "aluminum", "aluminium", "brass", "bronze", "copper", "chrome", "stainless", "titanium", "nickel", "zinc", "gold", "silver", "platinum", "cobalt", "tungsten", "alloy"]
     },
     {
       "tag": "Glass",
-      "words": ["glass", "pane", "prism", "crystal", "vitrified", "portal", "window"]
+      "words": ["glass", "pane", "prism", "crystal", "vitrified", "portal", "window", "mirror", "lens", "optic", "frosted", "tinted"]
     },
     {
       "tag": "Stone",
-      "words": ["granite", "marble", "slate", "limestone", "brick", "concrete", "pebble", "boulder", "cobblestone", "sandstone"]
+      "words": ["granite", "marble", "slate", "limestone", "brick", "concrete", "pebble", "boulder", "cobblestone", "sandstone", "basalt", "quartz", "obsidian", "flint", "chalk", "travertine"]
     },
     {
       "tag": "Fabric",
-      "words": ["fabric", "cloth", "linen", "silk", "velvet", "cotton", "wool", "canvas", "felt", "denim"]
+      "words": ["fabric", "cloth", "linen", "silk", "velvet", "cotton", "wool", "canvas", "felt", "denim", "satin", "chiffon", "tweed", "lace", "nylon", "polyester"]
     },
     {
       "tag": "Leather",
-      "words": ["leather", "suede", "hide", "patent"]
+      "words": ["leather", "suede", "hide", "patent", "cowhide", "lambskin", "faux"]
     },
     {
       "tag": "Plastic",
-      "words": ["plastic", "acrylic", "polycarbonate", "nylon", "pvc", "resin"]
+      "words": ["plastic", "acrylic", "polycarbonate", "nylon", "pvc", "resin", "epoxy", "silicone", "polyethylene", "ABS"]
     },
     {
       "tag": "Rubber",
-      "words": ["rubber", "silicone", "neoprene", "latex"]
+      "words": ["rubber", "silicone", "neoprene", "latex", "foam", "sponge", "bouncy", "elastic"]
     },
     {
       "tag": "Ceramic",
-      "words": ["ceramic", "porcelain", "terracotta", "tile", "glaze"]
+      "words": ["ceramic", "porcelain", "terracotta", "tile", "glaze", "pottery", "earthenware", "stoneware", "faience"]
     },
     {
       "tag": "Paper",
-      "words": ["paper", "cardboard", "kraft", "newspaper", "magazine"]
+      "words": ["paper", "cardboard", "kraft", "newspaper", "magazine", "parchment", "scroll", "map", "poster", "notebook"]
     },
     {
       "tag": "Foliage",
-      "words": ["leaf", "leafy", "tree", "bush", "shrub", "fern", "grass", "moss", "vine", "ivy", "canopy", "flower", "petal"]
+      "words": ["leaf", "leafy", "tree", "bush", "shrub", "fern", "grass", "moss", "vine", "ivy", "canopy", "flower", "petal", "blossom", "bloom", "reed", "thicket", "overgrown"]
     },
     {
       "tag": "Water",
-      "words": ["water", "ocean", "sea", "river", "lake", "puddle", "wave", "liquid", "fluid", "wet"]
+      "words": ["water", "ocean", "sea", "river", "lake", "puddle", "wave", "liquid", "fluid", "wet", "stream", "brook", "pond", "waterfall", "rapids", "estuary"]
     },
     {
       "tag": "Lighting",
-      "words": ["lamp", "light", "bulb", "lantern", "chandelier", "sconce", "torch", "spotlight", "neon", "emissive"]
+      "words": ["lamp", "light", "bulb", "lantern", "chandelier", "sconce", "torch", "spotlight", "neon", "emissive", "glow", "luminaire", "floodlight", "candle", "candelabra"]
     },
     {
       "tag": "Clutter",
-      "words": ["prop", "clutter", "junk", "debris", "scrap", "litter", "misc"]
+      "words": ["prop", "clutter", "junk", "debris", "scrap", "litter", "misc", "random", "odds", "bits", "pieces", "spare"]
+    },
+    {
+      "tag": "Architecture",
+      "words": ["wall", "floor", "ceiling", "door", "roof", "stair", "column", "beam", "arch", "frame", "railing", "fence", "gate", "window", "pillar", "foundation", "masonry", "facade", "balcony", "porch"]
+    },
+    {
+      "tag": "Terrain",
+      "words": ["ground", "soil", "sand", "gravel", "mud", "snow", "ice", "cliff", "hill", "mountain", "valley", "canyon", "plateau", "dune", "terrain", "landscape", "tundra", "swamp", "marsh"]
+    },
+    {
+      "tag": "Weapons",
+      "words": ["sword", "axe", "bow", "gun", "shield", "dagger", "spear", "hammer", "staff", "blade", "mace", "halberd", "katana", "crossbow", "pistol", "rifle", "cannon", "bazooka"]
+    },
+    {
+      "tag": "Vehicles",
+      "words": ["car", "truck", "boat", "plane", "train", "bicycle", "motorcycle", "ship", "aircraft", "helicopter", "submarine", "tank", "bus", "wagon", "chariot", "sled", "canoe", "yacht"]
+    },
+    {
+      "tag": "Food",
+      "words": ["food", "apple", "bread", "cheese", "coffee", "fruit", "vegetable", "meat", "mug", "bottle", "cup", "plate", "bowl", "pizza", "cake", "pie", "fruit", "meal"]
+    },
+    {
+      "tag": "Furniture",
+      "words": ["chair", "table", "desk", "sofa", "bed", "shelf", "cabinet", "lamp", "rug", "curtain", "couch", "stool", "bench", "wardrobe", "drawer", "chest", "bookshelf", "counter"]
+    },
+    {
+      "tag": "Animation",
+      "words": ["walk", "run", "idle", "attack", "death", "jump", "sit", "talk", "fly", "swim", "cast", "dodge", "block", "ride", "climb", "emote", "gesture", "dance", "wave", "nod"]
+    },
+    {
+      "tag": "VFX",
+      "words": ["fire", "smoke", "dust", "spark", "explosion", "particle", "magic", "glow", "trail", "shockwave", "ripple", "heal", "buff", "debuff", "aura", "flame", "ember", "ash"]
+    },
+    {
+      "tag": "Audio",
+      "words": ["sound", "music", "ambient", "sfx", "click", "whoosh", "footstep", "impact", "chime", "notification", "voice", "dialogue", "narration", "loop"]
+    },
+    {
+      "tag": "UI",
+      "words": ["button", "icon", "panel", "menu", "slider", "progress", "tooltip", "hud", "cursor", "badge", "tag", "label", "toggle", "checkbox", "dropdown", "toolbar"]
+    },
+    {
+      "tag": "Colors",
+      "words": ["red", "blue", "green", "yellow", "black", "white", "brown", "grey", "gray", "orange", "purple", "pink", "cyan", "magenta", "teal", "navy", "gold", "silver", "bronze", "copper"]
     }
   ]
 }

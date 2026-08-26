@@ -11,7 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=True, slots=True)
 class AssetKey:
     library_reference: str
     blend_path: str
@@ -37,7 +37,7 @@ class AssetKey:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class AssetSnapshot:
     key: AssetKey
     tags: list[str] = field(default_factory=list)
@@ -68,7 +68,18 @@ class AssetSnapshot:
         )
 
 
-@dataclass
+def merge_worker_facts(snapshot: "AssetSnapshot", worker_facts: dict[str, Any]) -> None:
+    """Merge worker-extracted facts into a snapshot without losing identity facts.
+
+    Background workers serialize facts with an empty ``library_reference`` (they
+    open raw .blend files and do not know which Asset Library owns the asset),
+    so the identity facts owned by the key are reasserted after the merge.
+    """
+    snapshot.facts.update(worker_facts)
+    snapshot.facts["library_reference"] = snapshot.key.library_reference
+
+
+@dataclass(slots=True)
 class TagOperation:
     kind: str
     targets: list[str]
@@ -78,6 +89,11 @@ class TagOperation:
     explanation: str = ""
     priority: int = 100
     enabled: bool = True
+    # When True, the operation's ADD/REPLACE values are injected verbatim after
+    # sanitization, so an explicit user edit (rename, manual tag, replace) is
+    # preserved exactly as typed — the user's change takes priority over
+    # normalization (casing, spacing, trimming, splitting).
+    verbatim: bool = False
     operation_id: str = field(default_factory=lambda: str(uuid4()))
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,10 +111,11 @@ class TagOperation:
             explanation=str(value.get("explanation", "")),
             priority=int(value.get("priority", 100)),
             enabled=bool(value.get("enabled", True)),
+            verbatim=bool(value.get("verbatim", False)),
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class DesiredAssetState:
     key: AssetKey
     before: list[str]
@@ -124,7 +141,7 @@ class DesiredAssetState:
         return value
 
 
-@dataclass
+@dataclass(slots=True)
 class Rule:
     name: str
     match_field: str = "name_tokens"

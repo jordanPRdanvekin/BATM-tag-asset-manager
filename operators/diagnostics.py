@@ -13,7 +13,13 @@ import bpy
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from ..adapters.blender_assets import batm_preferences, current_tags, find_local_id, set_local_tags
+from ..adapters.blender_assets import (
+    batm_preferences,
+    current_tags,
+    find_local_id,
+    refresh_asset_browser,
+    set_local_tags,
+)
 from ..adapters.storage import atomic_json_write
 from ..adapters.worker_ipc import prepare_request
 from ..core.models import AssetKey
@@ -22,46 +28,29 @@ from .. import BATM_VERSION_STRING
 from ..engine.backup import delete_backup, recoverable_backups, update_backup_states, verify_backup
 from ..engine.fingerprint import fingerprint_file
 from ..engine.inventory import INVENTORY
-from ..engine.logging import export_text
+from ..engine.logging import capture_exception, export_text
 from ..engine.scheduler import BatchScheduler, adaptive_worker_count
 
 
-def _refresh(context) -> None:
-    for window in context.window_manager.windows:
-        for area in window.screen.areas:
-            if area.type != "FILE_BROWSER" or getattr(area.spaces.active, "browse_mode", "") != "ASSETS":
-                continue
-            region = next((item for item in area.regions if item.type == "WINDOW"), None)
-            try:
-                with context.temp_override(window=window, screen=window.screen, area=area, region=region):
-                    bpy.ops.asset.library_refresh()
-                return
-            except RuntimeError:
-                pass
+class BATM_OT_refresh_all(bpy.types.Operator):
+    """Refresh the Asset Browser and the inventory in one action."""
 
-
-class BATM_OT_refresh_inventory(bpy.types.Operator):
-    bl_idname = "batm.refresh_inventory"
-    bl_label = "Refresh Asset Inventory"
+    bl_idname = "batm.refresh_all"
+    bl_label = "Refresh"
+    bl_description = "Refresh the Asset Browser and rebuild the library inventory"
+    bl_options = {"REGISTER"}
 
     def execute(self, context):
+        refresh_asset_browser(context)
         INVENTORY.begin(force=True)
-        context.window_manager.batm_runtime.status = "Inventory scan started"
-        return {"FINISHED"}
-
-
-class BATM_OT_refresh_browser(bpy.types.Operator):
-    bl_idname = "batm.refresh_browser"
-    bl_label = "Refresh Asset Browser"
-
-    def execute(self, context):
-        _refresh(context)
+        context.window_manager.batm_runtime.status = "Refresh started"
         return {"FINISHED"}
 
 
 class BATM_OT_export_diagnostics(bpy.types.Operator, ExportHelper):
     bl_idname = "batm.export_diagnostics"
     bl_label = "Export Diagnostics"
+    bl_description = "Export the current session state, snapshots and operations to a JSON report for inspection"
     filename_ext = ".json"
     filter_glob: StringProperty(default="*.json", options={"HIDDEN"})
 
@@ -91,13 +80,18 @@ class BATM_OT_export_diagnostics(bpy.types.Operator, ExportHelper):
             ],
             "recoverable_backups": [str(path) for path in recoverable_backups()],
         }
-        atomic_json_write(self.filepath, payload)
+        try:
+            atomic_json_write(self.filepath, payload)
+        except OSError as exc:
+            self.report({"ERROR"}, f"Could not export diagnostics: {exc}")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
 class BATM_OT_export_log_text(bpy.types.Operator, ExportHelper):
     bl_idname = "batm.export_log_text"
     bl_label = "Export Last Log as Text"
+    bl_description = "Export the most recent run log as a plain-text file for external review"
     filename_ext = ".txt"
     filter_glob: StringProperty(default="*.txt", options={"HIDDEN"})
 
@@ -107,13 +101,18 @@ class BATM_OT_export_log_text(bpy.types.Operator, ExportHelper):
         return bool(path and Path(path).is_file())
 
     def execute(self, context):
-        export_text(context.window_manager.batm_runtime.last_log_path, self.filepath)
+        try:
+            export_text(context.window_manager.batm_runtime.last_log_path, self.filepath)
+        except OSError as exc:
+            self.report({"ERROR"}, f"Could not export the log: {exc}")
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
 class BATM_OT_discard_backup(bpy.types.Operator):
     bl_idname = "batm.discard_backup"
     bl_label = "Discard Recovery Backup"
+    bl_description = "Permanently delete the selected recovery backup. The original Tags can no longer be restored from it"
     filepath: StringProperty()
 
     def invoke(self, context, event):
@@ -196,6 +195,14 @@ class BATM_OT_restore_backup(bpy.types.Operator):
             context.window_manager.modal_handler_add(self)
             return {"RUNNING_MODAL"}
         except Exception as exc:
+            capture_exception(
+                code="RESTORE_SETUP_FAILED",
+                message=str(exc),
+                operation="restore backup",
+                phase=SESSION.phase,
+                context="BATM_OT_restore_backup.execute",
+                exc=exc,
+            )
             if SESSION.phase == "RESTORING":
                 SESSION.set_phase("FAILED")
                 SESSION.set_phase("IDLE")
@@ -208,6 +215,21 @@ class BATM_OT_restore_backup(bpy.types.Operator):
         if event.type != "TIMER":
             return {"PASS_THROUGH"}
         scheduler = SESSION.scheduler
+        if scheduler is None:
+            # The scheduler vanished (e.g. add-on disabled mid-restore): exit
+            # cleanly and keep the backup for a later recovery.
+            if self._timer:
+                context.window_manager.event_timer_remove(self._timer)
+                self._timer = None
+            context.window_manager.progress_end()
+            if SESSION.phase == "RESTORING":
+                SESSION.set_phase("FAILED")
+                SESSION.set_phase("IDLE")
+            props = context.window_manager.batm_runtime
+            props.phase = "IDLE"
+            props.progress = 0.0
+            props.status = "Restore interrupted; backup retained"
+            return {"CANCELLED"}
         scheduler.poll()
         props = context.window_manager.batm_runtime
         props.progress = scheduler.confirmed_assets / max(1, scheduler.total_assets)
@@ -264,7 +286,7 @@ class BATM_OT_restore_backup(bpy.types.Operator):
             delete_backup(SESSION.backup_path)
             SESSION.set_phase("RESTORED")
             SESSION.set_phase("REFRESHING")
-            _refresh(context)
+            refresh_asset_browser(context)
             SESSION.set_phase("IDLE")
             props = context.window_manager.batm_runtime
             props.phase = "IDLE"
@@ -272,6 +294,14 @@ class BATM_OT_restore_backup(bpy.types.Operator):
             props.status = "Backup restored and verified"
             return {"FINISHED"}
         except Exception as exc:
+            capture_exception(
+                code="RESTORE_FAILED",
+                message=str(exc),
+                operation="restore backup",
+                phase=SESSION.phase,
+                context="BATM_OT_restore_backup._restore_current_and_finish",
+                exc=exc,
+            )
             return self._fail(context, str(exc))
 
     def _fail(self, context, message: str):
@@ -281,6 +311,7 @@ class BATM_OT_restore_backup(bpy.types.Operator):
         context.window_manager.progress_end()
         if SESSION.phase == "RESTORING":
             SESSION.set_phase("FAILED")
+        if SESSION.phase in ("FAILED", "RESTORED"):
             SESSION.set_phase("IDLE")
         props = context.window_manager.batm_runtime
         props.phase = "IDLE"
@@ -291,8 +322,7 @@ class BATM_OT_restore_backup(bpy.types.Operator):
 
 
 CLASSES = (
-    BATM_OT_refresh_inventory,
-    BATM_OT_refresh_browser,
+    BATM_OT_refresh_all,
     BATM_OT_export_diagnostics,
     BATM_OT_export_log_text,
     BATM_OT_discard_backup,

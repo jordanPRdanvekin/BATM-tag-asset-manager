@@ -6,29 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .fields import ALLOWED_FIELDS
 from .models import Rule
 
 RULE_SCHEMA_VERSION = 1
-ALLOWED_FIELDS = {
-    "name_tokens",
-    "id_type",
-    "object_type",
-    "data_type",
-    "collection_types",
-    "library_reference",
-    "path_tokens",
-    "library_tag",
-    "object_names",
-    "object_types",
-    "modifier_types",
-    "material_names",
-    "rig_types",
-    "geometry_node_names",
-    "bone_names",
-    "constraint_types",
-    "parent_names",
-    "hierarchy_depth",
-}
 ALLOWED_MODES = {"ANY", "ALL", "EXACT"}
 
 

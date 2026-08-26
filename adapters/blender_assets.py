@@ -131,7 +131,7 @@ def batm_preferences(context: Any) -> Any | None:
     """Centralized AddonPreferences lookup (single source of truth)."""
     try:
         for key, addon in context.preferences.addons.items():
-            if key.endswith("batch_asset_tag_manager") or key.endswith("BATM_4.0.0"):
+            if key.endswith("batch_asset_tag_manager"):
                 return addon.preferences
     except Exception:
         return None
@@ -140,6 +140,7 @@ def batm_preferences(context: Any) -> Any | None:
 
 def refresh_asset_browser(context: Any) -> bool:
     """Refresh every open Asset Browser window; True if at least one refreshed."""
+    refreshed = False
     try:
         for window in context.window_manager.windows:
             screen = window.screen
@@ -150,12 +151,12 @@ def refresh_asset_browser(context: Any) -> bool:
                 try:
                     with context.temp_override(window=window, screen=screen, area=area, region=region):
                         result = bpy.ops.asset.library_refresh()
-                        return "FINISHED" in result
+                        refreshed = refreshed or "FINISHED" in result
                 except RuntimeError:
                     continue
     except Exception:
         pass
-    return False
+    return refreshed
 
 
 def _is_file_writable(path: str) -> bool:
@@ -182,7 +183,6 @@ def _local_facts(datablock: Any) -> dict[str, Any]:
 
 def snapshot_selection(
     context: Any,
-    asset_type_filter: str = "ALL",
     defer_fingerprints: bool = False,
 ) -> list[AssetSnapshot]:
     fallback_library = _context_library_reference(context)
@@ -192,9 +192,7 @@ def snapshot_selection(
     for asset in selected_assets(context):
         path = _resolved_path(asset)
         id_type = str(getattr(asset, "id_type", "")).upper()
-        # Apply the Asset Type Filter when it is not "ALL".
-        if asset_type_filter != "ALL" and id_type != asset_type_filter:
-            continue
+        facts = _local_facts(getattr(asset, "local_id", None))
         key = AssetKey(
             library_reference=_owner_name(asset, fallback_library),
             blend_path=path,
@@ -228,7 +226,7 @@ def snapshot_selection(
         snapshot = AssetSnapshot(
             key=key,
             tags=tags,
-            facts=_local_facts(getattr(asset, "local_id", None)),
+            facts=facts,
             fingerprint=fingerprint_cache.get(path, {}),
             writable=not reason,
             excluded_reason=reason,
@@ -239,10 +237,18 @@ def snapshot_selection(
 
 
 def find_local_id(key: AssetKey) -> Any | None:
+    expected = key.id_type.upper()
+    fallback = None
+    # Current-file assets live in this file, so prefer the non-linked datablock.
+    # `bpy.data.all_ids` also exposes linked library datablocks; matching only
+    # name + id_type could pick a homonymous linked asset and edit the wrong one.
     for datablock in bpy.data.all_ids:
-        if str(datablock.bl_rna.identifier).upper() == key.id_type and datablock.name == key.datablock_name:
-            return datablock
-    return None
+        if str(datablock.bl_rna.identifier).upper() == expected and datablock.name == key.datablock_name:
+            if getattr(datablock, "library", None) is None:
+                return datablock
+            if fallback is None:
+                fallback = datablock
+    return fallback
 
 
 def current_tags(datablock: Any) -> list[str]:
@@ -263,12 +269,17 @@ def set_local_tags(datablock: Any, values: list[str]) -> None:
 def apply_current_file(states: list[DesiredAssetState]) -> None:
     if not bpy.data.is_saved or bpy.data.is_dirty:
         raise RuntimeError("Current file must be saved and clean before BATM can write it")
+    # Two passes: validate every asset before mutating any datablock, so a
+    # conflict never leaves a partially modified file behind.
+    resolved: list[tuple[Any, DesiredAssetState]] = []
     for state in states:
         datablock = find_local_id(state.key)
         if datablock is None:
             raise LookupError(f"Current-file asset not found: {state.key.token}")
         if current_tags(datablock) != state.before:
             raise RuntimeError(f"Current-file Tag conflict: {state.key.token}")
+        resolved.append((datablock, state))
+    for datablock, state in resolved:
         set_local_tags(datablock, state.after)
     result = bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False)
     if "FINISHED" not in result:

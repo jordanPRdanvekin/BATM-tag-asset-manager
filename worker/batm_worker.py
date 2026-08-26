@@ -11,6 +11,7 @@ import json
 import os
 import stat
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,25 @@ def atomic_write(path: str, value: Any) -> None:
         json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(temporary, target)
+    for attempt in range(4):
+        try:
+            os.replace(temporary, target)
+            return
+        except OSError:
+            if os.name != "nt":
+                temporary.unlink(missing_ok=True)
+                raise
+            # Windows: replace fails (WinError 5) while the main Blender process
+            # has the target open without FILE_SHARE_DELETE. Retry briefly; the
+            # reader closes quickly.
+            time.sleep(0.02 * (attempt + 1))
+    temporary.unlink(missing_ok=True)
+    # Windows last-resort non-atomic write so a status/result update never
+    # aborts the worker. Readers (read_json) tolerate a partial JSON.
+    with target.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def read_json(path: str) -> dict[str, Any]:
@@ -60,10 +79,18 @@ def id_type_of(datablock: Any) -> str:
 
 def find_id(id_type: str, name: str) -> Any | None:
     expected = id_type.upper()
+    fallback = None
+    # Prefer the datablock owned by the currently opened file (assets BATM edits
+    # live in the file being modified). `bpy.data.all_ids` also contains linked
+    # library datablocks, so ignoring `.library` could match a homonymous linked
+    # asset from another library and edit the wrong one.
     for datablock in bpy.data.all_ids:
         if id_type_of(datablock) == expected and datablock.name == name:
-            return datablock
-    return None
+            if getattr(datablock, "library", None) is None:
+                return datablock
+            if fallback is None:
+                fallback = datablock
+    return fallback
 
 
 def tag_names(datablock: Any) -> list[str]:
@@ -215,12 +242,63 @@ def process_inventory(request: dict[str, Any]) -> dict[str, Any]:
     return {"libraries": libraries}
 
 
+def analyze_files(request: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Analyze many .blend files inside a single worker process.
+
+    A large selection otherwise spawns one headless Blender subprocess per file,
+    which stalls the run and can exhaust memory. Per-file errors are isolated
+    (a broken file warns instead of failing the whole batch); only a fully empty
+    batch with errors is reported as a failure by the caller.
+    """
+    assets: list[dict[str, Any]] = []
+    errors: list[str] = []
+    cancel = Path(request["cancel_path"])
+    for index, file_payload in enumerate(request.get("files", []), start=1):
+        if cancel.exists():
+            raise InterruptedError("Cancellation requested")
+        blend_path = str(Path(file_payload["blend_path"]).resolve())
+        expected = file_payload.get("fingerprint") or {}
+        actual = fingerprint(blend_path)
+        if expected and not same_fingerprint(expected, actual):
+            errors.append(f"File changed after Preview: {blend_path}")
+            continue
+        try:
+            open_blend(blend_path)
+        except Exception as exc:
+            errors.append(f"{Path(blend_path).name}: {exc}")
+            continue
+        atomic_write(
+            request["status_path"],
+            {
+                "schema_version": 1,
+                "phase": "ANALYZE",
+                "processed_files": index,
+                "current_file": Path(blend_path).name,
+            },
+        )
+        sub = {
+            **file_payload,
+            "cancel_path": str(cancel),
+            "blend_path": blend_path,
+            "status_path": request["status_path"],
+        }
+        assets.extend(process_assets(sub, "ANALYZE"))
+    return assets, errors
+
+
 def run(request: dict[str, Any]) -> dict[str, Any]:
     if int(request.get("schema_version", 0)) != 1:
         raise ValueError("Unsupported BATM IPC schema")
     mode = str(request.get("mode", "")).upper()
     if mode == "INVENTORY":
         return {"success": True, **process_inventory(request)}
+
+    # ANALYZE is batched: one worker handles many files (see analyze_files).
+    if mode == "ANALYZE":
+        assets, errors = analyze_files(request)
+        if not assets and errors:
+            raise RuntimeError("; ".join(errors))
+        return {"success": True, "mode": mode, "assets": assets, "errors": errors, "verified": False}
 
     blend_path = str(Path(request["blend_path"]).resolve())
     expected_fingerprint = request.get("fingerprint", {})

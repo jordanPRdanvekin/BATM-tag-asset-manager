@@ -25,5 +25,5 @@ jobs:
       - name: Attach ZIP to the Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/batch_asset_tag_manager.zip
+          files: dist/BATM_*.zip
           generate_release_notes: true

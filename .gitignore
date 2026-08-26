@@ -1,0 +1,25 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+
+# Distribution / build artifacts
+dist/
+*.zip
+
+# Development / testing artifacts
+.batm_test/
+tests/
+docs/
+audit/
+tools/
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

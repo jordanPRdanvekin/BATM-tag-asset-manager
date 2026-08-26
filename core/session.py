@@ -9,7 +9,98 @@ from uuid import uuid4
 
 from .models import AssetSnapshot, DesiredAssetState, Rule, TagOperation
 from .reducer import compile_states
+from .sanitizer import tag_char_length
 from .state_machine import transition
+
+
+def filtered_added_tags(
+    states: list[DesiredAssetState],
+    search: str = "",
+    length: int = 0,
+) -> list[tuple[str, int]]:
+    """Unique proposed Add-step Tags with coverage, filtered and sorted.
+
+    Single source of truth for the Review → Add step: aggregation, free-text
+    (manual) search and exact character-length filter live here so the UI and the
+    pagination operator can never diverge.
+    """
+    agg: dict[str, tuple[str, int]] = {}
+    for state in states:
+        seen: set[str] = set()
+        for tag in state.added:
+            cf = tag.casefold()
+            if cf in seen:
+                continue
+            seen.add(cf)
+            display, count = agg.get(cf, (tag, 0))
+            agg[cf] = (display, count + 1)
+    items = sorted(agg.values(), key=lambda item: item[0].casefold())
+    search = (search or "").casefold().strip()
+    length = int(length or 0)
+    if not search and length <= 0:
+        return items
+    return [
+        (display, count)
+        for display, count in items
+        if (not search or search in display.casefold())
+        and (length <= 0 or tag_char_length(display) == length)
+    ]
+
+
+def filtered_final_tags(
+    states: list[DesiredAssetState],
+    search: str = "",
+    length: int = 0,
+) -> list[tuple[str, int]]:
+    """Unique final-state Tags with coverage, filtered and sorted.
+
+    Single source of truth for the Review last-step Final Tags preview: the UI
+    and the pagination operator share this so they can never diverge.
+    """
+    agg: dict[str, tuple[str, int]] = {}
+    for state in states:
+        seen: set[str] = set()
+        for tag in state.after:
+            cf = tag.casefold()
+            if cf in seen:
+                continue
+            seen.add(cf)
+            display, count = agg.get(cf, (tag, 0))
+            agg[cf] = (display, count + 1)
+    items = sorted(agg.values(), key=lambda item: item[0].casefold())
+    search = (search or "").casefold().strip()
+    length = int(length or 0)
+    if not search and length <= 0:
+        return items
+    return [
+        (display, count)
+        for display, count in items
+        if (not search or search in display.casefold())
+        and (length <= 0 or tag_char_length(display) == length)
+    ]
+
+
+def filter_tag_list(
+    frequency: list[tuple[str, int]],
+    search: str = "",
+    length: int = 0,
+) -> list[tuple[str, int]]:
+    """Filter a ``(name, count)`` Tag list by free-text search and exact length.
+
+    Single source of truth for the Manual Tag Editor filters; shared by the UI,
+    the pagination operator and Select All so they always agree on visibility.
+    Input order is preserved.
+    """
+    search = (search or "").casefold().strip()
+    length = int(length or 0)
+    if not search and length <= 0:
+        return list(frequency)
+    return [
+        (name, count)
+        for name, count in frequency
+        if (not search or search in name.casefold())
+        and (length <= 0 or tag_char_length(name) == length)
+    ]
 
 
 def filtered_review_states(search: str = "", filter_mode: str = "ALL") -> list[DesiredAssetState]:
@@ -66,6 +157,32 @@ class SessionController:
 
     def set_phase(self, value: str) -> None:
         self.phase = transition(self.phase, value)
+
+    def reset(self) -> None:
+        """Reset the transient run state (reload / re-register safe).
+
+        Keeps ``rules`` (reloaded separately by ``register``) and the scheduler
+        reference, but cancels any active scheduler and clears every transient
+        collection so a reload or disable/enable never leaves a phantom Review,
+        stale snapshots or a dangling worker behind.
+        """
+        self.phase = "IDLE"
+        self.run_id = ""
+        self.started_at = ""
+        self.snapshots.clear()
+        self.operations.clear()
+        self.desired.clear()
+        self.selected_tags.clear()
+        self.active_review_token = ""
+        self.messages.clear()
+        if self.scheduler is not None:
+            try:
+                self.scheduler.cancel()
+            except Exception:
+                pass
+            self.scheduler = None
+        self.backup_path = ""
+        self.sanitize_options = None
 
     def compile(self) -> dict[str, DesiredAssetState]:
         self.desired = compile_states(self.snapshots.values(), self.operations, self.sanitize_options)

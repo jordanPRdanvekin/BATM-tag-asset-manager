@@ -12,7 +12,10 @@ import bpy
 
 
 def base_dir() -> Path:
-    path = bpy.utils.user_resource("CONFIG", path="batm", create=True)
+    override = os.environ.get("BATM_BASE_DIR")
+    if override:
+        return Path(override)
+    path = bpy.utils.extension_path_user("BATM_tag_asset_manager", path="", create=True)
     return Path(path)
 
 
@@ -52,7 +55,27 @@ def atomic_json_write(path: str | Path, value: Any) -> Path:
         json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(temporary, target)
+    for attempt in range(4):
+        try:
+            os.replace(temporary, target)
+            return target
+        except OSError:
+            if os.name != "nt":
+                temporary.unlink(missing_ok=True)
+                raise
+            # Windows: os.replace fails with WinError 5 (Access Denied) when a
+            # concurrent reader has the target open without FILE_SHARE_DELETE
+            # (e.g. Blender's main process polling a worker status file). Retry
+            # briefly; the reader closes the file quickly.
+            time.sleep(0.02 * (attempt + 1))
+    temporary.unlink(missing_ok=True)
+    # Windows last-resort: a non-atomic direct write keeps a progress/status
+    # update from aborting the run. Readers (read_json) tolerate a partial JSON
+    # by returning their default, so a momentary non-atomic write is safe.
+    with target.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
     return target
 
 

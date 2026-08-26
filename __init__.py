@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
+from typing import TYPE_CHECKING
+
 import bpy
+
+if TYPE_CHECKING:
+    from bpy.typing import BlenderRegisterFn, BlenderUnregisterFn
 
 # Single source of truth for the add-on version. The manifest
 # (blender_manifest.toml) is the packaging source and is synced manually.
 BATM_VERSION = (4, 0, 0)
 BATM_VERSION_STRING = ".".join(str(part) for part in BATM_VERSION)
+
+# Support for Blender's "Reload Scripts" (F8).
+if "bpy" in locals():
+    # Re-import submodules so changes are picked up without restarting Blender.
+    _modules = list(sys.modules)
+    for _mod_name in _modules:
+        if _mod_name.startswith(__name__ + "."):
+            importlib.reload(sys.modules[_mod_name])
 
 from .adapters.rule_store import load_active_rules
 from .adapters.storage import ensure_dirs

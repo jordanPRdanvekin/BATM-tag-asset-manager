@@ -272,6 +272,17 @@ Tipos de datos presentes.
 Nombre de la biblioteca.
 Información accesible desde el Asset Browser.
 
+AutoTag también detecta prefijos de nomenclatura (SM_, SK_, M_, T_, A_, FX_, SC_, BP_, HDRI_, KIT_, GN_, Rig_) y genera Tags de tipo correspondiente (StaticMesh, SkeletalMesh, Material, Texture, Animation, VFX, etc.).
+
+Se generan Tags de rango de polígonos (LOWPoly, MEDIUMPoly, HIGHPoly) y de estado de animación (Animated) cuando esos metadatos están disponibles.
+
+Se deduplican automáticamente las operaciones que generan la misma Tag desde múltiples fuentes, conservando la explicación combinada y la prioridad más baja.
+
+Cuando un recurso de conocimiento (knowledge, taxonomy, segmenter) no coincide de forma exacta, se aplica un fallback de stemming (Porter Stemmer) para detectar variantes morfológicas como "running"→"run" o "fires"→"fire".
+
+Los recursos de conocimiento (autotag_knowledge.json, taxonomy.json, compound_splits.json, segmenter_lexicon.json) amplían el vocabulario del motor más allá de los tokens del nombre, cubriendo 26 grupos de conocimiento y 15 dominios de taxonomía.
+
+
 Toda esta información se transforma en una colección de etiquetas candidatas.
 
 Por ejemplo:
@@ -585,10 +596,13 @@ batm/
 │
 ├── engine/
 │   ├── autotag.py
-│   ├── sanitizer.py
-│   ├── preview.py
-│   ├── processor.py
 │   ├── backup.py
+│   ├── segmenter.py
+│   ├── stemmer.py
+│   ├── knowledge.py
+│   ├── taxonomy.py
+│   ├── metatags.py
+│   ├── fingerprint.py
 │   ├── diagnostics.py
 │   └── logging.py
 │
@@ -600,6 +614,11 @@ batm/
 │   └── serialization.py
 │
 └── resources/
+    ├── autotag_knowledge.json
+    ├── autotag_rules.json
+    ├── taxonomy.json
+    ├── compound_splits.json
+    └── segmenter_lexicon.json
 
 Esta organización favorece un crecimiento ordenado del proyecto y facilita el mantenimiento a largo plazo.
 
@@ -646,7 +665,7 @@ BATM no pretende reemplazar el Asset Browser de Blender ni convertirse en un ges
 Su propósito es ampliar las capacidades del sistema de etiquetas mediante herramientas de análisis, automatización y procesamiento masivo que permitan mantener bibliotecas organizadas de forma rápida, consistente y segura.
 
 Toda decisión de diseño debe reforzar esta idea: BATM es un motor especializado en la gestión inteligente de Tags, integrado de forma nativa con Blender 5.2 y construido para simplificar la organización de grandes bibliotecas de Assets sin alterar el flujo de trabajo habitual del usuario.
-05. Estado de Implementación y Conformidad (v4.0.0)
+05. Estado de Implementación y Conformidad (v3.0.0)
 
 Este archivo ES el SSOT de producto. El código implementado cumple todo lo definido arriba. Además quedan registradas las decisiones de diseño tomadas tras la auditoría para que el SSOT y el producto nunca divergan.
 

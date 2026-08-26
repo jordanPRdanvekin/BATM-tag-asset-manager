@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "$comment": "BATM concept catalog. Hierarchy: domain -> category (tag + words). Cross-tagging injects the domain label and the matched category tag in English. Emojis/arbitrary categories are avoided; every term is a practical asset-organizing concept. No AI: deterministic rule-based matching only.",
+  "domains": [
+    {
+      "id": "nature",
+      "label": "Nature",
+      "categories": [
+        { "tag": "Tree", "words": ["tree", "oak", "pine", "birch", "maple", "palm", "willow", "bamboo", "spruce", "cypress", "redwood", "beech", "cedar", "walnut", "teak", "forest", "elm", "ash", "cherry", "alder", "poplar", " sequoia", "sequoia"] },
+        { "tag": "Plant", "words": ["bush", "shrub", "fern", "grass", "ivy", "moss", "vine", "reed", "cactus", "succulent", "herb", "thicket", "overgrown", "mushroom", "toadstool", "fungus", "spore", "mycelium"] },
+        { "tag": "Flower", "words": ["rose", "tulip", "sunflower", "orchid", "lily", "petal", "blossom", "bloom", "daisy", "lavender", "lotus", "hibiscus", "chrysanthemum", "poppy"] },
+        { "tag": "Rock", "words": ["rock", "boulder", "stone", "pebble", "granite", "marble", "slate", "sandstone", "basalt", "cobble", "cliff", "obsidian", "quartz", "flint", "chalk"] },
+        { "tag": "Water", "words": ["water", "ocean", "sea", "river", "lake", "pond", "waterfall", "stream", "wave", "splash", "brook", "rapids", "estuary", "lagoon", "creek"] },
+        { "tag": "Sky", "words": ["cloud", "sky", "fog", "mist", "rain", "snow", "ice", "storm", "lightning", "rainbow", "sunset", "sunrise", "aurora", "star", "moon", "eclipse"] },
+        { "tag": "Terrain", "words": ["ground", "soil", "sand", "gravel", "mud", "dirt", "terrain", "landscape", "hill", "mountain", "valley", "canyon", "plateau", "tundra", "swamp", "marsh", "desert", "glacier"] }
+      ]
+    },
+    {
+      "id": "fauna",
+      "label": "Fauna",
+      "categories": [
+        { "tag": "Mammal", "words": ["mammal", "dog", "wolf", "fox", "cat", "lion", "tiger", "bear", "deer", "horse", "boar", "bull", "rabbit", "cow", "goat", "sheep", "monkey", "elephant", "camel", "moose", "elk", "panda", "gorilla", "leopard", "cheetah", "gazelle", "antelope"] },
+        { "tag": "Bird", "words": ["bird", "eagle", "owl", "crow", "raven", "hawk", "parrot", "pigeon", "chicken", "duck", "swan", "goose", "falcon", "pelican", "flamingo", "stork", "hummingbird", "kingfisher"] },
+        { "tag": "Aquatic", "words": ["fish", "shark", "whale", "tuna", "salmon", "octopus", "dolphin", "jellyfish", "crab", "lobster", "squid", "seal", "seahorse", "starfish", "ray", "barracuda", "piranha"] },
+        { "tag": "Reptile", "words": ["snake", "lizard", "turtle", "frog", "alligator", "crocodile", "gecko", "chameleon", "toad", "tortoise", "iguana", "salamander", "newt"] },
+        { "tag": "Insect", "words": ["insect", "spider", "scorpion", "beetle", "butterfly", "ant", "bee", "moth", "dragonfly", "wasp", "bug", "cricket", "grasshopper", "caterpillar", "centipede", "millipede"] },
+        { "tag": "Pet", "words": ["pet", "puppy", "kitty", "collar", "leash", "kitten", "hamster", "guinea_pig", "parakeet", "goldfish"] }
+      ]
+    },
+    {
+      "id": "human",
+      "label": "Human",
+      "categories": [
+        { "tag": "Human", "words": ["human", "man", "woman", "person", "people", "character", "hero", "villain", "citizen", "npc", "stranger", "companion", "ally", "enemy"] },
+        { "tag": "Humanoid", "words": ["humanoid", "elf", "dwarf", "orc", "goblin", "giant", "troll", "knight", "warrior", "mage", "priest", "civilian", "soldier", "guard", "archer", "rogue", "healer", "paladin", "necromancer"] },
+        { "tag": "Robot", "words": ["robot", "droid", "android", "drone", "mech", "automaton", "sentinel", "golem"] },
+        { "tag": "Creature", "words": ["creature", "monster", "beast", "alien", "mutant", "ghoul", "zombie", "demon", "golem", "skeleton", "wraith", "specter", "phantom", "leviathan", "hydra", "chimera"] }
+      ]
+    },
+    {
+      "id": "fantasy",
+      "label": "Fantasy",
+      "categories": [
+        { "tag": "Mythical", "words": ["mythical", "dragon", "werewolf", "griffin", "phoenix", "unicorn", "basilisk", "wyvern", "centaur", "mermaid", "titan", "kraken", "cerberus", "pegasus", "minotaur"] },
+        { "tag": "Undead", "words": ["undead", "zombie", "skeleton", "vampire", "ghoul", "lich", "mummy", "wraith", "demon", "specter", "phantom", "banshee", "revenant", "dreadlord"] },
+        { "tag": "Arcane", "words": ["arcane", "magic", "spell", "rune", "potion", "elixir", "cauldron", "wand", "staff", "scroll", "portal", "crystal_ball", "witchcraft", "sorcery", "enchant", "curse", "totem", "amulet", "sigil"] }
+      ]
+    },
+    {
+      "id": "scifi",
+      "label": "Sci-Fi",
+      "categories": [
+        { "tag": "Cyborg", "words": ["cyborg", "android", "drone", "mech", "exosuit", "prosthetic", "implant", "ai_core", "synthetic", "replicant", "borg"] },
+        { "tag": "Spacecraft", "words": ["spacecraft", "spaceship", "starship", "rover", "satellite", "warp_drive", "thruster", "space_station", "starfighter", "probe", "astronaut", "capsule", "shuttle", "freighter"] },
+        { "tag": "Hologram", "words": ["hologram", "laser", "cyberpunk", "dystopian", "terminal", "matrix", "forcefield", "nanotech", "scanner", "teleporter", "cloaking", "plasma", "ion", "quantum"] }
+      ]
+    },
+    {
+      "id": "furniture",
+      "label": "Furniture",
+      "categories": [
+        { "tag": "Seating", "words": ["chair", "armchair", "sofa", "stool", "bench", "throne", "couch", "recliner", "loveseat", "ottoman", "pouf"] },
+        { "tag": "Tables", "words": ["table", "desk", "counter", "workbench", "dining", "coffee_table", "end_table", "nightstand", "console"] },
+        { "tag": "Storage", "words": ["shelf", "bookshelf", "cabinet", "wardrobe", "chest", "crate", "drawer", "cupboard", "locker", "dresser", "armoire", "trunk"] },
+        { "tag": "Bedding", "words": ["bed", "mattress", "pillow", "blanket", "quilt", "sheet", "bunk", "crib", "hammock"] },
+        { "tag": "Decor", "words": ["lamp", "chandelier", "candle", "lantern", "mirror", "carpet", "rug", "curtain", "painting", "clock", "vase", "picture", "frame", "tapestry", "sculpture", "figurine"] }
+      ]
+    },
+    {
+      "id": "vehicles",
+      "label": "Vehicles",
+      "categories": [
+        { "tag": "Car", "words": ["car", "sedan", "coupe", "suv", "pickup", "taxi", "police_car", "convertible", "van", "minivan", "hatchback", "wagon"] },
+        { "tag": "LandVehicle", "words": ["truck", "bus", "motorcycle", "bicycle", "tank", "tractor", "train", "excavator", "bulldozer", "forklift", "rail", "subway", "atv", "snowmobile"] },
+        { "tag": "Aircraft", "words": ["aircraft", "airplane", "plane", "helicopter", "jet", "drone", "airship", "airliner", "glider", "balloon", "fighter", "bomber"] },
+        { "tag": "Watercraft", "words": ["watercraft", "ship", "boat", "submarine", "yacht", "sailboat", "raft", "barge", "frigate", "kayak", "canoe", "cruise", "tugboat"] }
+      ]
+    },
+    {
+      "id": "architecture",
+      "label": "Architecture",
+      "categories": [
+        { "tag": "Structural", "words": ["wall", "door", "window", "floor", "roof", "ceiling", "stairs", "pillar", "arch", "column", "beam", "rail", "gate", "foundation", "masonry", "facade", "balcony", "porch", "railing", "frame"] },
+        { "tag": "Building", "words": ["house", "mansion", "castle", "tower", "fortress", "church", "temple", "shop", "factory", "warehouse", "ruin", "hut", "cabin", "barn", "bridge", "cottage", "villa", "palace", "dungeon", "arena"] },
+        { "tag": "Urban", "words": ["street", "sidewalk", "lamp_post", "bench", "tunnel", "road", "plaza", "alley", "storefront", "intersection", "overpass", "underpass", "parking", "courtyard"] }
+      ]
+    },
+    {
+      "id": "props",
+      "label": "Props",
+      "categories": [
+        { "tag": "Container", "words": ["bottle", "cup", "glass", "plate", "bowl", "pot", "pan", "bucket", "barrel", "box", "bag", "jug", "jar", "vessel", "flask", "amphora", "urn", "basket", "sack"] },
+        { "tag": "Tool", "words": ["hammer", "wrench", "screwdriver", "saw", "shovel", "pickaxe", "key", "lock", "rope", "chain", "pliers", "drill", "axe", "ladder", "bucket", "brush", "paintbrush", "trowel"] },
+        { "tag": "Electronic", "words": ["screen", "monitor", "tv", "camera", "phone", "keyboard", "computer", "radio", "speaker", "antenna", "laptop", "tablet", "console", "controller", "headset"] },
+        { "tag": "Food", "words": ["food", "apple", "bread", "cheese", "bottle", "coffee", "mug", "fruit", "vegetable", "meat", "cake", "pie", "pizza", "meal", "dish", "snack", "drink"] },
+        { "tag": "Paper", "words": ["paper", "book", "magazine", "newspaper", "document", "map", "letter", "note", "journal", "scroll", "parchment", "poster", "blueprint", "recipe"] }
+      ]
+    },
+    {
+      "id": "combat",
+      "label": "Combat",
+      "categories": [
+        { "tag": "Melee", "words": ["sword", "dagger", "axe", "spear", "mace", "shield", "halberd", "katana", "blade", "staff_weapon", "club", "flail", "warhammer", "glaive", "scythe", "pitchfork"] },
+        { "tag": "Ranged", "words": ["bow", "crossbow", "arrow", "pistol", "rifle", "shotgun", "cannon", "grenade", "bazooka", "sniper", "slingshot", "blowgun", "javelin"] },
+        { "tag": "Armor", "words": ["helmet", "breastplate", "gauntlet", "visor", "vest", "boots", "pauldron", "armor", "shield", "cap", "greaves", "cuirass", "tassets", "bracers", "cloak", "cape"] }
+      ]
+    },
+    {
+      "id": "animation",
+      "label": "Animation",
+      "categories": [
+        { "tag": "Locomotion", "words": ["walk", "run", "sprint", "jog", "crawl", "climb", "swim", "fly", "glide", "hover", "teleport", "dash", "sneak", "creep", "stride"] },
+        { "tag": "Combat", "words": ["attack", "slash", "thrust", "punch", "kick", "block", "parry", "dodge", "roll", "stagger", "knockback", "finisher", "combo"] },
+        { "tag": "Emote", "words": ["idle", "emote", "gesture", "wave", "nod", "shake", "laugh", "cry", "anger", "fear", "surprise", "dance", "bow", "salute", "cheer"] },
+        { "tag": "Interaction", "words": ["sit", "talk", "pick_up", "put_down", "open", "close", "push", "pull", "lift", "carry", "throw", "catch", "use", "equip", "unequip"] },
+        { "tag": "State", "words": ["death", "revive", "spawn", "despawn", "respawn", "sleep", "wake", "eat", "drink", "heal", "buff", "debuff", "stun", "freeze", "burn"] }
+      ]
+    },
+    {
+      "id": "vfx",
+      "label": "VFX",
+      "categories": [
+        { "tag": "Elemental", "words": ["fire", "flame", "ember", "inferno", "ice", "frost", "freeze", "blizzard", "lightning", "thunder", "shock", "plasma", "ion", "electric"] },
+        { "tag": "Nature", "words": ["smoke", "dust", "wind", "rain", "snow", "fog", "mist", "cloud", "tornado", "whirlpool", "earthquake", "eruption"] },
+        { "tag": "Magical", "words": ["magic", "spell", "glow", "aura", "rune", "sigil", "enchant", "teleport", "portal", "warp", "hex", "curse", "bless", "heal", "resurrect"] },
+        { "tag": "Impact", "words": ["explosion", "spark", "shatter", "crack", "splash", "ripple", "wave", "trail", "streak", "burst", "shockwave", "debris", "fragment"] }
+      ]
+    },
+    {
+      "id": "style",
+      "label": "Style",
+      "categories": [
+        { "tag": "Realistic", "words": ["realistic", "photorealistic", "pbr", "physical", "accurate", "lifelike"] },
+        { "tag": "Stylized", "words": ["stylized", "cartoon", "toon", "chibi", "low_poly", "pixel", "voxel", "hand_painted", "cel_shaded", "npr", "flat_shaded"] },
+        { "tag": "Era", "words": ["medieval", "victorian", "modern", "futuristic", "ancient", "roman", "greek", "egyptian", "feudal", "renaissance", "baroque", "industrial", "steampunk", "cyberpunk", "post_apocalyptic"] }
+      ]
+    },
+    {
+      "id": "quality",
+      "label": "Quality",
+      "categories": [
+        { "tag": "PolyCount", "words": ["lowpoly", "midpoly", "highpoly", "lod0", "lod1", "lod2", "game_ready", "production", "concept"] },
+        { "tag": "Condition", "words": ["clean", "damaged", "broken", "rusty", "mossy", "weathered", "pristine", "worn", "scratched", "dented", "cracked", "burnt", "corroded", "decayed"] },
+        { "tag": "Finish", "words": ["matte", "glossy", "satin", "brushed", "polished", "rough", "smooth", "bumpy", "textured", "grainy", "refractive", "translucent", "opaque", "transparent"] }
+      ]
+    }
+  ],
+  "auxiliary": {
+    "material": {
+      "tag": "Material",
+      "words": ["wood", "metal", "steel", "iron", "glass", "stone", "brick", "concrete", "fabric", "cloth", "leather", "plastic", "rubber", "ceramic", "paper", "porcelain", "marble", "granite", "gold", "silver", "copper", "brass", "bronze", "carbon", "bamboo", "hemp", "jute"]
+    },
+    "style": {
+      "tag": "Stylized",
+      "words": ["stylized", "cartoon", "game", "toon", "chibi", "low_poly", "pixel", "voxel", "hand_painted", "cel_shaded", "npr"]
+    }
+  },
+  "aliases": {
+    "timber": ["Wood"],
+    "lumber": ["Wood"],
+    "plank": ["Wood"],
+    "foliage": ["Nature"],
+    "vegetation": ["Nature"],
+    "greenery": ["Nature"],
+    "sculpture": ["Props"],
+    "figurine": ["Props"],
+    "statue": ["Props"],
+    "mech": ["Sci-Fi"],
+    "droid": ["Sci-Fi"],
+    "spaceship": ["Sci-Fi"],
+    "starship": ["Sci-Fi"],
+    "sword": ["Combat"],
+    "blade": ["Combat"],
+    "armor": ["Combat"],
+    "shield": ["Combat"],
+    "magic": ["Fantasy"],
+    "spell": ["Fantasy"],
+    "rune": ["Fantasy"],
+    "dragon": ["Fantasy"],
+    "zombie": ["Fantasy"],
+    "skeleton": ["Fantasy"]
+  },
+  "contextual_terms": {
+    "child": { "default": ["Human"], "fauna": ["pup"] },
+    "baby": { "default": ["Human"], "fauna": ["hatchling", "fawn"] },
+    "pup": { "default": ["Fauna"] },
+    "cub": { "default": ["Fauna"] },
+    "human": { "default": ["Human"] },
+    "man": { "default": ["Human"] },
+    "woman": { "default": ["Human"] },
+    "kid": { "default": ["Human"], "fauna": ["pup"] },
+    "elder": { "default": ["Human"], "fauna": ["alpha"] },
+    "alpha": { "default": ["Fauna"] },
+    "baby": { "default": ["Human"], "fauna": ["hatchling", "fawn"] },
+    "small": { "default": ["tiny", "miniature"] },
+    "large": { "default": ["giant", "massive", "huge"] },
+    "broken": { "default": ["damaged", "destroyed", "ruined"] },
+    "old": { "default": ["ancient", "vintage", "antique"] },
+    "new": { "default": ["modern", "fresh", "pristine"] },
+    "dark": { "default": ["shadow", "night", "eclipse"] },
+    "bright": { "default": ["light", "glow", "radiant"] },
+    "fast": { "default": ["swift", "speed", "rapid"] },
+    "strong": { "default": ["power", "mighty", "heavy"] }
+  }
+}

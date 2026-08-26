@@ -48,6 +48,21 @@ def adaptive_worker_count(job_count: int, preference_limit: int = 4) -> int:
     return max(1, min(4, preference_limit, max(1, job_count), cpu_limit, memory_limit))
 
 
+def analysis_batch_plan(file_count: int, worker_limit: int = 4) -> list[tuple[int, int]]:
+    """Slice ``file_count`` .blend files into balanced analysis batches.
+
+    Each ``(start, size)`` chunk is dispatched to a single worker process so a
+    large selection does not boot one headless Blender subprocess per file.
+    About ``worker_limit * 4`` batches keep several workers busy without one
+    oversized batch stranding a slow worker; never more batches than files.
+    """
+    if file_count <= 0:
+        return []
+    target = min(file_count, max(1, worker_limit * 4))
+    batch_size = max(1, -(-file_count // target))
+    return [(start, batch_size) for start in range(0, file_count, batch_size)]
+
+
 @dataclass
 class RunningJob:
     prepared: dict[str, Any]
@@ -139,7 +154,15 @@ class BatchScheduler:
         prepared_jobs.extend(job.prepared for job in self.running)
         prepared_jobs.extend(record["prepared"] for record in self.completed)
         prepared_jobs.extend(record["prepared"] for record in self.failed)
-        return sum(len(job.get("request", {}).get("assets", [])) for job in prepared_jobs)
+        total = 0
+        for job in prepared_jobs:
+            request = job.get("request", {})
+            files = request.get("files")
+            if files:
+                total += sum(len(item.get("assets", [])) for item in files)
+            else:
+                total += len(request.get("assets", []))
+        return total
 
     @property
     def confirmed_assets(self) -> int:

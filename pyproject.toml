@@ -1,0 +1,38 @@
+[project]
+name = "batch-asset-tag-manager"
+version = "3.0.0"
+description = "Batch Asset Tag Manager for Blender 5.2 LTS"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+maintainers = [
+    { name = "Jordan Perez" },
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "SIM",   # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function call in default argument (common in Blender)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["BATM_tag_asset_manager"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

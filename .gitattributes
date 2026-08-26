@@ -1,2 +1,24 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalize all text files to LF on commit and checkout
+* text=auto eol=lf
+
+# Explicitly declare text files
+*.py text diff=python eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+*.cfg text eol=lf
+
+# CRLF only for Windows batch files
+*.bat text eol=crlf
+
+# Binary files — never modify
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.blend binary
+*.pyc binary
+*.pyo binary

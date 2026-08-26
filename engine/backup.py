@@ -70,15 +70,14 @@ def verify_backup(path: str | Path) -> dict[str, Any]:
 def recoverable_backups() -> list[Path]:
     backups = list(ensure_dirs()["backups"].glob("batm_backup_*.json"))
 
-    def sort_key(path: Path):
-        payload = read_json(path, {})
-        stamp = payload.get("created_at", "") if isinstance(payload, dict) else ""
-        if stamp:
-            try:
-                return datetime.fromisoformat(stamp).timestamp()
-            except ValueError:
-                pass
-        return path.stat().st_mtime
+    def sort_key(path: Path) -> float:
+        # Atomic writes set the mtime when the backup is finalized, so mtime
+        # ordering matches creation order without reading every manifest (this
+        # helper runs on every panel redraw).
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
 
     return sorted(backups, key=sort_key)
 

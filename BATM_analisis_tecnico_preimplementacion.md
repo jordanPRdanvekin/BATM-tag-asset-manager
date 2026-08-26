@@ -263,9 +263,65 @@ Determinista y sin escritura:
 - para objetos: tipo de objeto y tipo de datos;
 - para colecciones: número y tipos de objetos;
 - biblioteca y ruta;
+- metadatos de polígonos (`poly_count`, `poly_count_range`: LOW/MEDIUM/HIGH);
+- presencia de animación (`has_animation`);
+- presencia de UVs (`has_uvs`);
+- conteo de vértices (`vertex_count`);
+- nombres de colecciones padre;
 - otros datos públicos previstos por el SSOT.
 
 Para assets externos, agrupar por `.blend` y abrir cada archivo una sola vez en un Blender headless de análisis. Nunca guardar el archivo durante AutoTag.
+
+### Detección de prefijos
+
+AutoTag reconoce convenciones de nomenclatura comunes y genera Tags de tipo correspondiente:
+
+| Prefijo | Tag generada |
+|---------|-------------|
+| `SM_` | StaticMesh |
+| `SK_` | SkeletalMesh |
+| `M_` | Material |
+| `MI_` | MaterialInstance |
+| `T_` | Texture |
+| `A_` | Animation |
+| `BP_` | Blueprint |
+| `FX_` | VFX |
+| `SC_` | Sound |
+| `HDRI_` | HDRI |
+| `KIT_` | KitPiece |
+| `GN_` | GeometryNodes |
+| `Rig_` | Rig |
+
+Prioridad: 7 (se aplica antes de knowledge/taxonomy en prioridad 11-12).
+
+### Deduplicación
+
+Cuando múltiples fuentes (nombre, knowledge, taxonomy, rules) producen la misma `(target, value)` se fusionan:
+
+- prioridad: se conserva la más baja (más importante);
+- explicación: se concatena con `;` para trazabilidad completa.
+
+### Fallback de stemming
+
+Cuando la coincidencia exacta falla, se aplica un Porter Stemmer para detectar variantes morfológicas. Ejemplo:
+
+- `running` → `run` (coincide con regla que busca "run");
+- `fires` → `fire` (coincide con knowledge que contiene "fire");
+- `lighting` → `light` (coincide con taxonomía "Light").
+
+El stemmer es un módulo puro sin dependencias (`engine/stemmer.py`), versionado internamente.
+
+### Recursos de conocimiento
+
+El motor carga vocabulario desde archivos JSON externos en `resources/`:
+
+| Archivo | Contenido | Cantidad |
+|---------|-----------|----------|
+| `autotag_knowledge.json` | Grupos de conocimiento (wood, metal, nature, etc.) | 26 grupos, ~200+ palabras |
+| `taxonomy.json` | Dominios taxonómicos y categorías | 15 dominios |
+| `compound_splits.json` | Palabras compuestas curadas | ~90+ entradas |
+| `segmenter_lexicon.json` | Léxico base del segmentador | ~500+ palabras |
+| `autotag_rules.json` | Reglas configurables por el usuario | Variable |
 
 ### Reglas de generación
 
@@ -279,7 +335,7 @@ Environment_OakTree
   taxonomía Oak/Tree → Nature
 ```
 
-“Nature” no proviene directamente de la API; exige un diccionario o taxonomía explícita. También hace falta separar PascalCase/camelCase para obtener `Oak` y `Tree`. El legado únicamente convierte el nombre completo a Title Case y, si se sanitiza, cambia `_` por espacio; no implementa el análisis del ejemplo del SSOT.
+"Nature" no proviene directamente de la API; exige un diccionario o taxonomía explícita. También hace falta separar PascalCase/camelCase para obtener `Oak` y `Tree`. El legado únicamente convierte el nombre completo a Title Case y, si se sanitiza, cambia `_` por espacio; no implementa el análisis del ejemplo del SSOT.
 
 Las reglas de AutoTag deben ser configurables, versionadas y comprobables. No hay requisito de red, IA generativa ni servicios externos.
 
