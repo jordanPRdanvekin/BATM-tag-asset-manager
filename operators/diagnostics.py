@@ -135,7 +135,9 @@ class BATM_OT_restore_backup(bpy.types.Operator):
 
     @classmethod
     def poll(cls, _context):
-        return SESSION.phase == "IDLE" and bool(recoverable_backups())
+        # Read the session cache (populated at register and after every backup
+        # mutation) instead of globbing the filesystem on every operator redraw.
+        return SESSION.phase == "IDLE" and bool(SESSION.recoverable_backup_paths)
 
     def invoke(self, context, event):
         return context.window_manager.invoke_confirm(self, event)

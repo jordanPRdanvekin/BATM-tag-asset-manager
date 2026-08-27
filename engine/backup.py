@@ -10,8 +10,9 @@ from typing import Any
 
 import bpy
 
-from ..adapters.storage import atomic_json_write, ensure_dirs, read_json
+from ..adapters.storage import atomic_json_write, base_dir, ensure_dirs, read_json
 from ..core.models import AssetSnapshot, DesiredAssetState
+from ..core.session import SESSION
 from .. import BATM_VERSION_STRING
 
 
@@ -52,6 +53,7 @@ def create_backup(
     path = ensure_dirs()["backups"] / f"batm_backup_{run_id}.json"
     atomic_json_write(path, payload)
     verify_backup(path)
+    _refresh_backup_cache()
     return path
 
 
@@ -67,19 +69,40 @@ def verify_backup(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def _backup_mtime(path: Path) -> float:
+    """mtime ordering matches creation order without reading every manifest."""
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _backups_dir() -> Path:
+    """Resolve the backups directory without creating it (read-only query).
+
+    Creation of the storage directories is an initialisation-time concern owned
+    by ``ensure_dirs()``; queries must never trigger directory creation from the
+    UI draw() path.
+    """
+    return base_dir() / "backups"
+
+
 def recoverable_backups() -> list[Path]:
-    backups = list(ensure_dirs()["backups"].glob("batm_backup_*.json"))
+    """List recoverable backups, newest last, and mirror the result into the
+    in-memory session cache so the UI reads it without filesystem I/O."""
+    try:
+        backups = [path for path in _backups_dir().glob("batm_backup_*.json") if path.is_file()]
+    except OSError:
+        backups = []
+    backups.sort(key=_backup_mtime)
+    SESSION.recoverable_backup_paths = [str(path) for path in backups]
+    return backups
 
-    def sort_key(path: Path) -> float:
-        # Atomic writes set the mtime when the backup is finalized, so mtime
-        # ordering matches creation order without reading every manifest (this
-        # helper runs on every panel redraw).
-        try:
-            return path.stat().st_mtime
-        except OSError:
-            return 0.0
 
-    return sorted(backups, key=sort_key)
+def _refresh_backup_cache() -> tuple[list[Path], list[str]]:
+    """Refresh and return (paths, str-paths) after any backup mutation."""
+    backups = recoverable_backups()
+    return backups, SESSION.recoverable_backup_paths
 
 
 def update_backup_states(path: str | Path, blend_paths: set[str], status: str) -> None:
@@ -96,6 +119,7 @@ def update_backup_states(path: str | Path, blend_paths: set[str], status: str) -
 
 def delete_backup(path: str | Path) -> None:
     Path(path).unlink(missing_ok=True)
+    _refresh_backup_cache()
 
 
 def prune_backups(retention_days: int = 30) -> list[Path]:

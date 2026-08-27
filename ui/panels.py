@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import bpy
 
@@ -14,7 +13,6 @@ from ..adapters.blender_assets import (
     selected_tag_frequency,
 )
 from ..core.session import SESSION, filter_tag_list, filtered_review_states
-from ..engine.backup import recoverable_backups
 from ..engine.inventory import INVENTORY
 from ..engine.diagnostics import summarize
 
@@ -304,7 +302,7 @@ def _draw_recovery(layout, context) -> None:
     they are safety operations, not technical detail, so they are never hidden
     behind the collapsed Settings section.
     """
-    backups = recoverable_backups()
+    backups = SESSION.recoverable_backup_paths
     errors = [event for event in SESSION.messages if event.get("severity") == "ERROR"]
     warnings = [event for event in SESSION.messages if event.get("severity") == "WARNING"]
     if not errors and not backups:
@@ -313,12 +311,11 @@ def _draw_recovery(layout, context) -> None:
     box.label(text="Attention Needed", icon="ERROR")
     box.label(text=f"Recoverable backups: {len(backups)}   Errors: {len(errors)}", icon="RECOVER_LAST")
     if backups:
-        latest = backups[-1]
         row = box.row(align=True)
         restore = row.operator("batm.restore_backup", text="Restore Latest", icon="RECOVER_LAST")
-        restore.filepath = str(latest)
+        restore.filepath = backups[-1]
         discard = row.operator("batm.discard_backup", text="Discard Latest", icon="TRASH")
-        discard.filepath = str(latest)
+        discard.filepath = backups[-1]
     for event in (errors + warnings)[-3:]:
         box.label(text=f"{event.get('code')}: {event.get('message')}", icon="ERROR")
 

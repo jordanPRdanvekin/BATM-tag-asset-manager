@@ -145,6 +145,10 @@ class SessionController:
     scheduler: Any = None
     backup_path: str = ""
     sanitize_options: dict[str, Any] | None = None
+    # Cached list of on-disk recovery backups (newest last), refreshed at
+    # register time and after every backup mutation. Kept in the session so the
+    # UI reads a pre-computed value instead of touching the filesystem in draw().
+    recoverable_backup_paths: list[str] = field(default_factory=list)
 
     def begin(self) -> None:
         if self.phase != "IDLE":

@@ -10,12 +10,17 @@ from typing import Any
 
 import bpy
 
+# Extension id must never be hardcoded: it is the manifest ``id`` and equals the
+# top-level package name. Resolve it dynamically (SSOT) so path lookups stay
+# correct regardless of the installed package identity.
+from .. import __package__ as base_package
+
 
 def base_dir() -> Path:
     override = os.environ.get("BATM_BASE_DIR")
     if override:
         return Path(override)
-    path = bpy.utils.extension_path_user("BATM_tag_asset_manager", path="", create=True)
+    path = bpy.utils.extension_path_user(base_package, path="", create=True)
     return Path(path)
 
 

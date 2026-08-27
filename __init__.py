@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 # Single source of truth for the add-on version. The manifest
 # (blender_manifest.toml) is the packaging source and is synced manually.
-BATM_VERSION = (4, 0, 0)
+BATM_VERSION = (3, 0, 0)
 BATM_VERSION_STRING = ".".join(str(part) for part in BATM_VERSION)
 
 # Support for Blender's "Reload Scripts" (F8).
