@@ -145,7 +145,11 @@ def _validate_execution_preflight(states: list[DesiredAssetState]) -> None:
 class BATM_OT_run(bpy.types.Operator):
     bl_idname = "batm.run"
     bl_label = "Run BATM"
-    bl_description = "Freeze the selection, analyze AutoTag rules and open editable Review"
+    bl_description = (
+        "Analyze the selected assets, propose automatic tags (name, compounds, "
+        "taxonomy, rig and animation), then open the Review so you confirm before "
+        "any file is written"
+    )
     bl_options = {"REGISTER"}
 
     _timer = None
@@ -399,7 +403,12 @@ class BATM_OT_run(bpy.types.Operator):
                 , SESSION.rules
                 , load_knowledge()
                 , taxonomy=active_taxonomy()
-                , tax_options={ "catalog_mode": getattr(prefs, "catalog_mode", "CONCEPTS"), "cross_tagging": getattr(prefs, "cross_tagging", True) }
+                , tax_options={
+                    "catalog_mode": getattr(prefs, "catalog_mode", "CONCEPTS"),
+                    "cross_tagging": getattr(prefs, "cross_tagging", True),
+                    "split_compounds": getattr(prefs, "autotag_split_compounds", True),
+                    "tag_style": getattr(prefs, "autotag_tag_style", "TITLE"),
+                }
             )
         )
         SESSION.sanitize_options = options_from_props(_runtime(context))

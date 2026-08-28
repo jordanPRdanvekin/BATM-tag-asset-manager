@@ -2,7 +2,7 @@
 from __future__ import annotations
 import math
 from ..adapters.blender_assets import batm_preferences
-from ..core.session import SESSION, filtered_added_tags, filtered_final_tags, filtered_review_states
+from ..core.session import SESSION, filter_tag_names, filtered_added_tags, filtered_final_tags, filtered_review_states
 
 
 def _aggregate_before(states):
@@ -76,10 +76,13 @@ def _step_added(layout, context, props, states):
         length=props.tag_length_filter,
     )
     box = layout.box()
-    # Filters: free-text ("manual") search plus an exact character-length filter.
+    # Filters: by name (substring) + by nº characters (exact, alnum only).
     filter_row = box.row(align=True)
     filter_row.prop(props, "review_add_search", text="", icon="VIEWZOOM")
-    filter_row.prop(props, "tag_length_filter", text="Length")
+    filter_row.label(text="By name", icon="SORTALPHA")
+    filter_row = box.row(align=True)
+    filter_row.prop(props, "tag_length_filter", text="Nº chars")
+    filter_row.label(text="By character count (0 = all)", icon="FONT_DATA")
     box.label(text=f"Add · {len(agg)} unique Tags", icon="ADD")
     if not agg:
         box.label(text="No additions proposed", icon="INFO")
@@ -219,7 +222,29 @@ def _step_assets(layout, context, props, states):
         detail.label(text=f"{active.key.datablock_name} [{active.key.id_type}]", icon="OBJECT_DATA")
         detail.label(text="Before: " + (", ".join(active.before) if active.before else "(none)"))
         detail.label(text="After:  " + (", ".join(active.after) if active.after else "(none)"))
-        for tag in active.after:
+        # Per-asset Tag list filters: name, length range, category, compound-only.
+        tag_mode = str(props.review_tag_filter_mode)
+        frow = detail.row(align=True)
+        frow.prop(props, "review_tag_filter_mode", text="")
+        if tag_mode in ("LENGTH", "ALL"):
+            lrow = detail.row(align=True)
+            lrow.prop(props, "review_tag_min_len", text="Min")
+            lrow.prop(props, "review_tag_max_len", text="Max")
+        if tag_mode in ("CATEGORY", "ALL"):
+            detail.prop(props, "review_tag_category", text="", icon="VIEWZOOM")
+        if tag_mode == "COMPOUND":
+            detail.prop(props, "review_tag_compound_multi", text="Multi-word only")
+        shown_tags = filter_tag_names(
+            active.after,
+            search=props.review_tag_category if tag_mode in ("CATEGORY", "ALL") else "",
+            min_len=props.review_tag_min_len if tag_mode in ("LENGTH", "ALL") else 0,
+            max_len=props.review_tag_max_len if tag_mode in ("LENGTH", "ALL") else 0,
+            category=props.review_tag_category if tag_mode == "CATEGORY" else "",
+            compound={True: True, False: False}.get(bool(props.review_tag_compound_multi))
+            if tag_mode == "COMPOUND" else None,
+        )
+        shown_tags = list(dict.fromkeys(shown_tags))
+        for tag in shown_tags:
             row = detail.row(align=True)
             reasons = active.tag_reasons.get(tag.casefold(), [])
             if len(reasons) == 1:

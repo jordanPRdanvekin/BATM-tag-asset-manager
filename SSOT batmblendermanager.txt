@@ -278,9 +278,15 @@ Se generan Tags de rango de polígonos (LOWPoly, MEDIUMPoly, HIGHPoly) y de esta
 
 Se deduplican automáticamente las operaciones que generan la misma Tag desde múltiples fuentes, conservando la explicación combinada y la prioridad más baja.
 
-Cuando un recurso de conocimiento (knowledge, taxonomy, segmenter) no coincide de forma exacta, se aplica un fallback de stemming (Porter Stemmer) para detectar variantes morfológicas como "running"→"run" o "fires"→"fire".
+La segmentación de compuestos sin separador usa un Trie en memoria O(L): "rosarojavioleta" se divide en "rosa"+"roja"+"violeta" (modo Both emite además "Rosa Roja Violeta").
 
-Los recursos de conocimiento (autotag_knowledge.json, taxonomy.json, compound_splits.json, segmenter_lexicon.json) amplían el vocabulario del motor más allá de los tokens del nombre, cubriendo 26 grupos de conocimiento y 15 dominios de taxonomía.
+Cuando no hay coincidencia exacta, se aplica un Lemma-Dict exacto (lemma_map.json, 310 entradas: running→run, rosas→rosa); Porter Stemmer queda solo como fallback deprecado para evitar over-stemming (procedural→procedur).
+
+El sistema Mutex Fauna suprime Human cuando Fauna gana (child→cub, old en prop→weathered no elder, grulla/zorro se resuelven correctamente a Fauna/Bird/Mammal).
+
+Extractores profundos inspeccionan rig (quadruped/biped, has_tail, facial bones), shape keys/FACS, NLA/layered actions (Blender 5.2), bounding volume (foreach_get) y nodos de material (skin/metal/emissive) sin depsgraph pesado.
+
+Los recursos de conocimiento (autotag_knowledge.json 33 grupos/863 palabras, taxonomy.json 19 dominios/1649 palabras, compound_splits.json 209 entradas, segmenter_lexicon.json 2502 palabras, lemma_map.json 310 lemas, autotag_rules.json 23 reglas) amplían el vocabulario a 5533 tokens totales.
 
 
 Toda esta información se transforma en una colección de etiquetas candidatas.

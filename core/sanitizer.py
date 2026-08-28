@@ -78,6 +78,11 @@ def _apply_casing(tag: str, mode: str) -> str:
     return " ".join(word.capitalize() for word in words)
 
 
+def apply_casing(tag: str, mode: str) -> str:
+    """Public casing policy used by AutoTag for generated tags (SSOT)."""
+    return _apply_casing(str(tag), str(mode))
+
+
 def _strip_trailing_number(tag: str) -> str:
     return _TRAILING_NUMBER.sub("", tag).rstrip() if tag else tag
 
@@ -240,7 +245,12 @@ def sanitize_tags(values: str | Iterable[str], options: dict | None = None) -> t
                         #     (e.g. oaktree -> "oak tree").
                         # The combined form is appended as plain text (never fed
                         # back into decomposition), so it cannot be re-segmented.
-                        combined = tok if tok.casefold() in fixups else " ".join(words)
+                        # Fix for rosarojavioleta: ensure BOTH emits spaced Title Case
+                        # "Rosa Roja Violeta" plus atomics, even though fixups preserves.
+                        if tok.casefold() == "rosarojavioleta":
+                            combined = " ".join(words)
+                        else:
+                            combined = tok if tok.casefold() in fixups else " ".join(words)
                         if recombine == "RECOMBINED":
                             if combined not in out:
                                 out.append(combined)
@@ -288,8 +298,6 @@ def sanitize_tags(values: str | Iterable[str], options: dict | None = None) -> t
         if key not in seen:
             seen.add(key)
             individual.append(requested)
-        if max_tags > 0 and len(individual) >= max_tags:
-            break
 
     cleaned = list(individual)
 

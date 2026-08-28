@@ -101,10 +101,13 @@ def _draw_manual(layout, context) -> None:
     if not _collapsible_header(box, props, "manual_expanded", "Manual Tag Editor"):
         return
 
-    # Search + character-length filter first.
+    # Search by name + filter by nº characters (both respect pagination).
     row = box.row(align=True)
     row.prop(props, "tag_search", text="", icon="VIEWZOOM")
-    row.prop(props, "tag_length_filter", text="Length")
+    row.label(text="Filter by name", icon="SORTALPHA")
+    row = box.row(align=True)
+    row.prop(props, "tag_length_filter", text="Nº chars")
+    row.label(text="Filter by character count (0 = all)", icon="FONT_DATA")
 
     # Tag list with multi-select (manual search + exact character-length filter).
     total, frequency = selected_tag_frequency(context)
@@ -378,11 +381,24 @@ def _draw_settings(layout, context) -> None:
 def _draw_run(layout, props) -> None:
     """RUN BATM — always visible, wide, large and never collapsible."""
     layout.scale_y = 3.0
-    layout.operator("batm.run", text="Run BATM", icon="PLAY")
+    layout.operator(
+        "batm.run",
+        text="Run BATM  —  Analyze, Review & Apply Tags",
+        icon="PLAY",
+    )
     layout.scale_y = 1.0
+    layout.label(
+        text="Scans selected assets, proposes tags (AutoTag), then Review before writing.",
+        icon="INFO",
+    )
     if props.last_summary:
-        layout.label(text=props.last_summary, icon="INFO")
-    layout.label(text=props.status)
+        layout.label(text=props.last_summary, icon="CHECKMARK")
+    if props.status:
+        layout.label(text=props.status)
+    # Sponsored footer — minimal, non-invasive
+    row = layout.row()
+    row.alignment = "CENTER"
+    row.label(text="Sponsored by b-water Studios Animation", icon="FUND")
 
 
 class BATM_PT_main(bpy.types.Panel):

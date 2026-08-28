@@ -46,7 +46,7 @@ def metatag_operations(snapshot: AssetSnapshot) -> list[TagOperation]:
                 targets=[target],
                 values=[id_tag],
                 origin="AUTO",
-                priority=6,
+                priority=5,
                 explanation=f"Metadata -> id_type={id_type}",
             )
         )
@@ -72,7 +72,7 @@ def metatag_operations(snapshot: AssetSnapshot) -> list[TagOperation]:
                 targets=[target],
                 values=[label],
                 origin="AUTO",
-                priority=9,
+                priority=25,
                 explanation=f"Metadata -> object.type={obj_type}",
             )
         )

@@ -37,6 +37,23 @@ class BATMPreferences(bpy.types.AddonPreferences):
         default="CONCEPTS",
     )
     cross_tagging: BoolProperty(name="Enable Cross-Tagging", default=True)
+    autotag_split_compounds: BoolProperty(
+        name="Split Compound Names",
+        description="Emit the atomic components of glued names (rosarojavioleta -> Rosa, Roja, Violeta) together with the compound unit. On by default",
+        default=True,
+    )
+    autotag_tag_style: EnumProperty(
+        name="AutoTag Style",
+        description="Naming policy applied to tags generated from names (Title Case is the historic preset and stays unchanged)",
+        items=[
+            ("TITLE", "Title Case", "Capitalize every word (e.g. Oak Tree)"),
+            ("KEBAB", "Kebab Case", "Lowercase words joined with hyphens (e.g. oak-tree)"),
+            ("SNAKE", "Snake Case", "Lowercase words joined with underscores (e.g. oak_tree)"),
+            ("PASCAL", "Pascal Case", "Every word capitalized with no separator (e.g. OakTree)"),
+            ("LOWER", "Lower Case", "All words lowercase (e.g. oak tree)"),
+        ],
+        default="TITLE",
+    )
     taxonomy_expanded: BoolProperty(name="Internal Taxonomy Manual", default=False)
     taxonomy_domain: StringProperty(name="Filter Domain")
     taxonomy_search: StringProperty(name="Search Term")
@@ -45,6 +62,10 @@ class BATMPreferences(bpy.types.AddonPreferences):
 
     def draw(self, _context):
         layout = self.layout
+        # Sponsored header — always visible, non-invasive
+        header = layout.box()
+        header.label(text="Sponsored by b-water Studios Animation", icon="FUND")
+        header.operator("wm.url_open", text="b-water.com", icon="URL").url = "https://b-water.com"
         layout.prop(self, "max_workers")
         layout.prop(self, "worker_timeout_seconds")
         layout.prop(self, "review_page_size")
@@ -56,6 +77,8 @@ class BATMPreferences(bpy.types.AddonPreferences):
         box.label(text="AutoTag Settings", icon="PREFERENCES")
         box.prop(self, "catalog_mode", text="Catalog level")
         box.prop(self, "cross_tagging", text="Enable Cross-Tagging")
+        box.prop(self, "autotag_split_compounds", text="Split Compound Names")
+        box.prop(self, "autotag_tag_style", text="Tag naming style")
         row = box.row()
         row.prop(
             self,

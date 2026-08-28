@@ -13,16 +13,26 @@ from .sanitizer import tag_char_length
 from .state_machine import transition
 
 
+def _length_filter(display: str, length: int, min_len: int, max_len: int) -> bool:
+    """Shared range filter: exact ``length`` wins when set, else min/max bounds."""
+    ln = tag_char_length(display)
+    if length > 0:
+        return ln == length
+    return (min_len <= 0 or ln >= min_len) and (max_len <= 0 or ln <= max_len)
+
+
 def filtered_added_tags(
     states: list[DesiredAssetState],
     search: str = "",
     length: int = 0,
+    min_len: int = 0,
+    max_len: int = 0,
 ) -> list[tuple[str, int]]:
     """Unique proposed Add-step Tags with coverage, filtered and sorted.
 
     Single source of truth for the Review → Add step: aggregation, free-text
-    (manual) search and exact character-length filter live here so the UI and the
-    pagination operator can never diverge.
+    (manual) search, exact character-length and min/max range filters live here
+    so the UI and the pagination operator can never diverge.
     """
     agg: dict[str, tuple[str, int]] = {}
     for state in states:
@@ -37,13 +47,15 @@ def filtered_added_tags(
     items = sorted(agg.values(), key=lambda item: item[0].casefold())
     search = (search or "").casefold().strip()
     length = int(length or 0)
-    if not search and length <= 0:
+    min_len = int(min_len or 0)
+    max_len = int(max_len or 0)
+    if not search and length <= 0 and min_len <= 0 and max_len <= 0:
         return items
     return [
         (display, count)
         for display, count in items
         if (not search or search in display.casefold())
-        and (length <= 0 or tag_char_length(display) == length)
+        and _length_filter(display, length, min_len, max_len)
     ]
 
 
@@ -51,6 +63,8 @@ def filtered_final_tags(
     states: list[DesiredAssetState],
     search: str = "",
     length: int = 0,
+    min_len: int = 0,
+    max_len: int = 0,
 ) -> list[tuple[str, int]]:
     """Unique final-state Tags with coverage, filtered and sorted.
 
@@ -70,13 +84,15 @@ def filtered_final_tags(
     items = sorted(agg.values(), key=lambda item: item[0].casefold())
     search = (search or "").casefold().strip()
     length = int(length or 0)
-    if not search and length <= 0:
+    min_len = int(min_len or 0)
+    max_len = int(max_len or 0)
+    if not search and length <= 0 and min_len <= 0 and max_len <= 0:
         return items
     return [
         (display, count)
         for display, count in items
         if (not search or search in display.casefold())
-        and (length <= 0 or tag_char_length(display) == length)
+        and _length_filter(display, length, min_len, max_len)
     ]
 
 
@@ -84,8 +100,10 @@ def filter_tag_list(
     frequency: list[tuple[str, int]],
     search: str = "",
     length: int = 0,
+    min_len: int = 0,
+    max_len: int = 0,
 ) -> list[tuple[str, int]]:
-    """Filter a ``(name, count)`` Tag list by free-text search and exact length.
+    """Filter a ``(name, count)`` Tag list by free-text search and length range.
 
     Single source of truth for the Manual Tag Editor filters; shared by the UI,
     the pagination operator and Select All so they always agree on visibility.
@@ -93,14 +111,49 @@ def filter_tag_list(
     """
     search = (search or "").casefold().strip()
     length = int(length or 0)
-    if not search and length <= 0:
+    min_len = int(min_len or 0)
+    max_len = int(max_len or 0)
+    if not search and length <= 0 and min_len <= 0 and max_len <= 0:
         return list(frequency)
     return [
         (name, count)
         for name, count in frequency
         if (not search or search in name.casefold())
-        and (length <= 0 or tag_char_length(name) == length)
+        and _length_filter(name, length, min_len, max_len)
     ]
+
+
+def filter_tag_names(
+    tags: list[str],
+    search: str = "",
+    min_len: int = 0,
+    max_len: int = 0,
+    category: str = "",
+    compound: bool | None = None,
+) -> list[str]:
+    """Filter a single asset's Tag list (Last Step per-asset detail, SSOT).
+
+    ``compound`` True keeps only multi-word Tags, False keeps only single-word
+    Tags, None disables that filter. Used by the Last Step detail so the shown
+    list matches the pagination-aware UI exactly.
+    """
+    search = (search or "").casefold().strip()
+    category = (category or "").casefold().strip()
+    output: list[str] = []
+    for tag in tags:
+        text = str(tag)
+        if search and search not in text.casefold():
+            continue
+        if category and category not in text.casefold():
+            continue
+        if not _length_filter(text, 0, int(min_len or 0), int(max_len or 0)):
+            continue
+        if compound is True and " " not in text:
+            continue
+        if compound is False and " " in text:
+            continue
+        output.append(text)
+    return output
 
 
 def filtered_review_states(search: str = "", filter_mode: str = "ALL") -> list[DesiredAssetState]:

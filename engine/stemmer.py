@@ -1,3 +1,4 @@
+# Deprecated: prefer engine.lemma for exact dictionary lemmatization. Kept for fallback.
 """Vendored Porter Stemmer (public domain, ~1980 algorithm).
 
 Pure-Python implementation with zero dependencies. Used as a lightweight

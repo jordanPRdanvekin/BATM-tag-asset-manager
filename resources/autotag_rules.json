@@ -5,8 +5,12 @@
       "rule_id": "builtin-mesh",
       "name": "Mesh object",
       "match_field": "object_type",
-      "match_values": ["MESH"],
-      "add_tags": ["Mesh"],
+      "match_values": [
+        "MESH"
+      ],
+      "add_tags": [
+        "Mesh"
+      ],
       "match_mode": "EXACT",
       "priority": 10,
       "enabled": true
@@ -15,8 +19,12 @@
       "rule_id": "builtin-collection",
       "name": "Collection asset",
       "match_field": "id_type",
-      "match_values": ["COLLECTION"],
-      "add_tags": ["Collection"],
+      "match_values": [
+        "COLLECTION"
+      ],
+      "add_tags": [
+        "Collection"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -25,8 +33,12 @@
       "rule_id": "builtin-material",
       "name": "Material asset",
       "match_field": "id_type",
-      "match_values": ["MATERIAL"],
-      "add_tags": ["Material"],
+      "match_values": [
+        "MATERIAL"
+      ],
+      "add_tags": [
+        "Material"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -35,8 +47,12 @@
       "rule_id": "builtin-world",
       "name": "World asset",
       "match_field": "id_type",
-      "match_values": ["WORLD"],
-      "add_tags": ["World"],
+      "match_values": [
+        "WORLD"
+      ],
+      "add_tags": [
+        "World"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -45,8 +61,12 @@
       "rule_id": "builtin-light",
       "name": "Light asset",
       "match_field": "object_type",
-      "match_values": ["LIGHT"],
-      "add_tags": ["Lighting"],
+      "match_values": [
+        "LIGHT"
+      ],
+      "add_tags": [
+        "Lighting"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -55,8 +75,12 @@
       "rule_id": "builtin-armature",
       "name": "Armature / Rig asset",
       "match_field": "object_type",
-      "match_values": ["ARMATURE"],
-      "add_tags": ["Rig"],
+      "match_values": [
+        "ARMATURE"
+      ],
+      "add_tags": [
+        "Rig"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -65,8 +89,12 @@
       "rule_id": "builtin-camera",
       "name": "Camera asset",
       "match_field": "object_type",
-      "match_values": ["CAMERA"],
-      "add_tags": ["Camera"],
+      "match_values": [
+        "CAMERA"
+      ],
+      "add_tags": [
+        "Camera"
+      ],
       "match_mode": "EXACT",
       "priority": 20,
       "enabled": true
@@ -75,8 +103,21 @@
       "rule_id": "builtin-nature",
       "name": "Recognized nature terms",
       "match_field": "name_tokens",
-      "match_values": ["tree", "oak", "pine", "rock", "plant", "flower", "grass", "forest", "bush", "leaf"],
-      "add_tags": ["Nature"],
+      "match_values": [
+        "tree",
+        "oak",
+        "pine",
+        "rock",
+        "plant",
+        "flower",
+        "grass",
+        "forest",
+        "bush",
+        "leaf"
+      ],
+      "add_tags": [
+        "Nature"
+      ],
       "match_mode": "ANY",
       "priority": 50,
       "enabled": true
@@ -85,8 +126,19 @@
       "rule_id": "builtin-furniture",
       "name": "Recognized furniture terms",
       "match_field": "name_tokens",
-      "match_values": ["chair", "table", "sofa", "desk", "cabinet", "shelf", "bed", "lamp"],
-      "add_tags": ["Furniture"],
+      "match_values": [
+        "chair",
+        "table",
+        "sofa",
+        "desk",
+        "cabinet",
+        "shelf",
+        "bed",
+        "lamp"
+      ],
+      "add_tags": [
+        "Furniture"
+      ],
       "match_mode": "ANY",
       "priority": 50,
       "enabled": true
@@ -95,8 +147,19 @@
       "rule_id": "builtin-vehicle",
       "name": "Recognized vehicle terms",
       "match_field": "name_tokens",
-      "match_values": ["car", "truck", "bike", "vehicle", "aircraft", "boat", "ship", "motorcycle"],
-      "add_tags": ["Vehicle"],
+      "match_values": [
+        "car",
+        "truck",
+        "bike",
+        "vehicle",
+        "aircraft",
+        "boat",
+        "ship",
+        "motorcycle"
+      ],
+      "add_tags": [
+        "Vehicle"
+      ],
       "match_mode": "ANY",
       "priority": 50,
       "enabled": true
@@ -105,8 +168,12 @@
       "rule_id": "builtin-rigify",
       "name": "Rigify rig",
       "match_field": "rig_types",
-      "match_values": ["RIGIFY"],
-      "add_tags": ["Rigify"],
+      "match_values": [
+        "RIGIFY"
+      ],
+      "add_tags": [
+        "Rigify"
+      ],
       "match_mode": "EXACT",
       "priority": 30,
       "enabled": true
@@ -115,8 +182,12 @@
       "rule_id": "builtin-subdivision",
       "name": "Subdivision modifier",
       "match_field": "modifier_types",
-      "match_values": ["SUBSURF"],
-      "add_tags": ["Subdivision"],
+      "match_values": [
+        "SUBSURF"
+      ],
+      "add_tags": [
+        "Subdivision"
+      ],
       "match_mode": "EXACT",
       "priority": 40,
       "enabled": true
@@ -125,8 +196,12 @@
       "rule_id": "builtin-bevel",
       "name": "Bevel modifier",
       "match_field": "modifier_types",
-      "match_values": ["BEVEL"],
-      "add_tags": ["Bevel"],
+      "match_values": [
+        "BEVEL"
+      ],
+      "add_tags": [
+        "Bevel"
+      ],
       "match_mode": "EXACT",
       "priority": 40,
       "enabled": true
@@ -135,8 +210,12 @@
       "rule_id": "builtin-lattice",
       "name": "Lattice modifier",
       "match_field": "modifier_types",
-      "match_values": ["LATTICE"],
-      "add_tags": ["Lattice"],
+      "match_values": [
+        "LATTICE"
+      ],
+      "add_tags": [
+        "Lattice"
+      ],
       "match_mode": "EXACT",
       "priority": 40,
       "enabled": true
@@ -145,8 +224,18 @@
       "rule_id": "builtin-shader",
       "name": "Shader / Material names",
       "match_field": "material_names",
-      "match_values": ["shader", "bsdf", "material", "glass", "metal", "wood", "fabric"],
-      "add_tags": ["Material Assets"],
+      "match_values": [
+        "shader",
+        "bsdf",
+        "material",
+        "glass",
+        "metal",
+        "wood",
+        "fabric"
+      ],
+      "add_tags": [
+        "Material Assets"
+      ],
       "match_mode": "ANY",
       "priority": 45,
       "enabled": true
@@ -155,8 +244,15 @@
       "rule_id": "builtin-library-context",
       "name": "Project/environment context",
       "match_field": "library_tag",
-      "match_values": ["Comedy Island", "Comedy_Island", "comedy_island", "Comedyisland"],
-      "add_tags": ["Comedy Island"],
+      "match_values": [
+        "Comedy Island",
+        "Comedy_Island",
+        "comedy_island",
+        "Comedyisland"
+      ],
+      "add_tags": [
+        "Comedy Island"
+      ],
       "match_mode": "ANY",
       "priority": 15,
       "enabled": true
@@ -165,8 +261,21 @@
       "rule_id": "builtin-nature-content",
       "name": "Nature by deep object names",
       "match_field": "object_names",
-      "match_values": ["tree", "oak", "pine", "rock", "plant", "flower", "grass", "bush", "leaf", "bark"],
-      "add_tags": ["Nature"],
+      "match_values": [
+        "tree",
+        "oak",
+        "pine",
+        "rock",
+        "plant",
+        "flower",
+        "grass",
+        "bush",
+        "leaf",
+        "bark"
+      ],
+      "add_tags": [
+        "Nature"
+      ],
       "match_mode": "ANY",
       "priority": 60,
       "enabled": true
@@ -175,10 +284,180 @@
       "rule_id": "builtin-props-content",
       "name": "Props by deep object names",
       "match_field": "object_types",
-      "match_values": ["MESH"],
-      "add_tags": ["Prop"],
+      "match_values": [
+        "MESH"
+      ],
+      "add_tags": [
+        "Prop"
+      ],
       "match_mode": "ANY",
       "priority": 60,
+      "enabled": true
+    },
+    {
+      "rule_id": "builtin-biome-path",
+      "name": "Biome by path / collection",
+      "match_field": "library_path",
+      "match_values": [
+        "cyberpunk",
+        "medieval",
+        "desert",
+        "underwater",
+        "scifi",
+        "victorian",
+        "arctic",
+        "jungle",
+        "wasteland",
+        "urban",
+        "rural",
+        "gothic",
+        "baroque",
+        "city",
+        "forest",
+        "tundra",
+        "neon_city",
+        "old_town"
+      ],
+      "add_tags": [
+        "Biome"
+      ],
+      "match_mode": "ANY",
+      "priority": 55,
+      "enabled": true
+    },
+    {
+      "rule_id": "builtin-anatomy-bone",
+      "name": "Anatomy by bone names",
+      "match_field": "bone_names",
+      "match_values": [
+        "snout",
+        "horn",
+        "wing",
+        "claw",
+        "paw",
+        "jaw",
+        "feather",
+        "beak",
+        "hoof",
+        "mane",
+        "tusk",
+        "antler",
+        "fin",
+        "scale",
+        "shell",
+        "spine",
+        "tail",
+        "ear",
+        "eye",
+        "nose",
+        "tooth",
+        "fang",
+        "whisker",
+        "talon",
+        "muzzle",
+        "brow",
+        "crest"
+      ],
+      "add_tags": [
+        "Anatomy"
+      ],
+      "match_mode": "ANY",
+      "priority": 55,
+      "enabled": true
+    },
+    {
+      "rule_id": "builtin-pipeline-role",
+      "name": "Pipeline role by prefix",
+      "match_field": "name_tokens",
+      "match_values": [
+        "hero",
+        "proxy",
+        "background",
+        "crowd",
+        "matte",
+        "light_rig",
+        "placeholder",
+        "kitbash",
+        "lod0",
+        "lod1",
+        "lod2",
+        "lod3",
+        "highpoly",
+        "lowpoly",
+        "midpoly"
+      ],
+      "add_tags": [
+        "Pipeline"
+      ],
+      "match_mode": "ANY",
+      "priority": 55,
+      "enabled": true
+    },
+    {
+      "rule_id": "builtin-color-material",
+      "name": "Color by material names",
+      "match_field": "material_names",
+      "match_values": [
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "black",
+        "white",
+        "brown",
+        "grey",
+        "gray",
+        "orange",
+        "purple",
+        "pink",
+        "cyan",
+        "magenta",
+        "teal",
+        "navy",
+        "gold",
+        "silver",
+        "bronze",
+        "copper",
+        "crimson",
+        "emerald",
+        "azure",
+        "violet",
+        "turquoise",
+        "indigo"
+      ],
+      "add_tags": [
+        "Color"
+      ],
+      "match_mode": "ANY",
+      "priority": 55,
+      "enabled": true
+    },
+    {
+      "rule_id": "builtin-quality-poly",
+      "name": "Quality by poly / LOD",
+      "match_field": "name_tokens",
+      "match_values": [
+        "lowpoly",
+        "midpoly",
+        "highpoly",
+        "lod0",
+        "lod1",
+        "lod2",
+        "lod3",
+        "game_ready",
+        "proxy",
+        "decimated",
+        "optimized",
+        "hero",
+        "background",
+        "ultra_low",
+        "ultra_high"
+      ],
+      "add_tags": [
+        "Quality"
+      ],
+      "match_mode": "ANY",
+      "priority": 55,
       "enabled": true
     }
   ]

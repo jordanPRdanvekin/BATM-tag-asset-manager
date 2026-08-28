@@ -301,27 +301,40 @@ Cuando múltiples fuentes (nombre, knowledge, taxonomy, rules) producen la misma
 - prioridad: se conserva la más baja (más importante);
 - explicación: se concatena con `;` para trazabilidad completa.
 
-### Fallback de stemming
+### Segmentación Trie + Lematización
 
-Cuando la coincidencia exacta falla, se aplica un Porter Stemmer para detectar variantes morfológicas. Ejemplo:
+- **Trie prefix-tree** (`engine/trie.py`): O(L) segmentación de compuestos sin separador. `rosarojavioleta` → `rosa` + `roja` + `violeta` en un solo pase. Reemplaza DP O(n·28) con scoring `len²+bonus`.
+- **Lemma-Dict** (`engine/lemma.py` + `resources/lemma_map.json` 310 entradas): mapeo exacto `running→run`, `wolves→wolf`, `rosas→rosa`, con identity-maps `procedural→procedural` para evitar over-stemming de Porter. Fallback `lower` si no hay entrada.
+- **Porter Stemmer** (`engine/stemmer.py`) queda como fallback deprecado solo para casos no cubiertos por lemma.
 
-- `running` → `run` (coincide con regla que busca "run");
-- `fires` → `fire` (coincide con knowledge que contiene "fire");
-- `lighting` → `light` (coincide con taxonomía "Light").
+### Resolución de dominio Mutex Fauna
 
-El stemmer es un módulo puro sin dependencias (`engine/stemmer.py`), versionado internamente.
+Sistema de votación y supresión cruzada (`engine/taxonomy.py`):
+- Si Fauna gana (score +50 por prefijo SK_/SM_ + conteo tokens), Human se suprime completamente.
+- `child`→`cub`/`pup`, `old` en prop→`weathered`/`vintage` (no `elder`), `small`/`large` inyectan Fauna cuando corresponde.
+- Dominios internos `linguistic`/`blender_tech` suprimidos de la salida — solo sirven como puentes alias (`grulla→crane→Bird`, `zorro→fox→Mammal`).
 
-### Recursos de conocimiento
+### Extractores profundos de animación/rig
+
+`engine/extractors.py` — `extract_deep_facts()` inspecciona sin depsgraph pesado:
+- **Armature**: topología `quadruped`/`biped`, `has_tail`, `bone_count`, `has_facial_bones`.
+- **Shape Keys / FACS**: 20 claves (`jaw_open`, `eye_blink`, `viseme`…) → `has_facs`.
+- **Animation Data**: NLA tracks, `action.slots` (Blender 5.2 layered), `has_nla`, `is_layered_action`.
+- **Bounding Volume**: `foreach_get` para `bbox_volume`/`bbox_height` → `scale_class` (micro/small/medium/large/hero).
+- **Material Nodes**: Principled BSDF → `has_subsurface`/`has_metallic`/`shader_type` (skin/metal/emissive).
+
+### Recursos de conocimiento (corpus 5533 tokens)
 
 El motor carga vocabulario desde archivos JSON externos en `resources/`:
 
 | Archivo | Contenido | Cantidad |
 |---------|-----------|----------|
-| `autotag_knowledge.json` | Grupos de conocimiento (wood, metal, nature, etc.) | 26 grupos, ~200+ palabras |
-| `taxonomy.json` | Dominios taxonómicos y categorías | 15 dominios |
-| `compound_splits.json` | Palabras compuestas curadas | ~90+ entradas |
-| `segmenter_lexicon.json` | Léxico base del segmentador | ~500+ palabras |
-| `autotag_rules.json` | Reglas configurables por el usuario | Variable |
+| `autotag_knowledge.json` | Grupos de conocimiento (wood, metal, biomes, anatomy…) | 33 grupos, 863 palabras |
+| `taxonomy.json` | Dominios taxonómicos + aliases ES | 19 dominios, 1649 palabras |
+| `compound_splits.json` | Compuestos curados (ES+EN+pipeline) | 209 entradas |
+| `segmenter_lexicon.json` | Léxico base del segmentador | 2502 palabras |
+| `lemma_map.json` | Diccionario de lemas exactos | 310 entradas |
+| `autotag_rules.json` | Reglas deterministas versionadas | 23 reglas |
 
 ### Reglas de generación
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core.models import AssetSnapshot
+from .segmenter import collect_words, decompose, load_compound_splits
 
 RESOURCE_PATH = Path(__file__).resolve().parents[1] / "resources" / "autotag_knowledge.json"
 
@@ -41,8 +42,14 @@ def word_index(groups: list[dict[str, Any]]) -> dict[str, str]:
     return index
 
 
-def _candidate_facts(snapshot: AssetSnapshot) -> set[str]:
-    """Casefolded word pool from the facts most likely to carry category terms."""
+def _candidate_facts(snapshot: AssetSnapshot, groups: list[dict[str, Any]] | None = None) -> set[str]:
+    """Casefolded word pool from the facts most likely to carry category terms.
+
+    Glued compounds (``rosarojavioleta``, ``foxcub``) are widened with their
+    curated fixup components and, when the knowledge lexicon knows them, their
+    segmenter parts — so knowledge categories are matched by the atomic words,
+    never blocked by an exact-token-only coincidence.
+    """
     facts = snapshot.facts
     sources: list[Any] = [
         facts.get("name_tokens", []) or [],
@@ -58,6 +65,18 @@ def _candidate_facts(snapshot: AssetSnapshot) -> set[str]:
                 token = "".join(char for char in word if char.isalnum())
                 if token:
                     words.add(token.casefold())
+    if not words:
+        return words
+    # Widen with compound components (exact fixup first, then lexical split).
+    fixups = load_compound_splits()
+    lexicon = collect_words(groups or []) if groups else frozenset()
+    for token in list(words):
+        try:
+            parts, was_split = decompose(token, lexicon, fixups=fixups)
+        except Exception:
+            continue
+        if was_split:
+            words.update(str(part).casefold() for part in parts if len(str(part)) >= 2)
     return words
 
 
@@ -70,7 +89,7 @@ def knowledge_tags(snapshot: AssetSnapshot, groups: list[dict[str, Any]], limit:
     index = word_index(groups)
     if not index:
         return []
-    candidates = _candidate_facts(snapshot)
+    candidates = _candidate_facts(snapshot, groups)
     if not candidates:
         return []
     seen: set[str] = set()

@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .trie import Trie, build_trie, trie_segment
+
 LEXICON_PATH = Path(__file__).resolve().parents[1] / "resources" / "segmenter_lexicon.json"
 COMPOUND_SPLITS_PATH = Path(__file__).resolve().parents[1] / "resources" / "compound_splits.json"
 
 _BASE_WORDS: frozenset[str] | None = None
 _compound_splits: dict[str, list[str]] | None = None
+_trie_cache: Trie | None = None
+_trie_words_hash: int | None = None
 
 
 def _load_base_words() -> frozenset[str]:
@@ -29,6 +33,18 @@ def _load_base_words() -> frozenset[str]:
         }
     _BASE_WORDS = frozenset(words)
     return _BASE_WORDS
+
+
+def get_trie(lexicon: frozenset[str]) -> Trie:
+    """Build/cache Trie from lexicon words."""
+    global _trie_cache, _trie_words_hash
+    h = hash(lexicon)
+    if _trie_cache is not None and _trie_words_hash == h:
+        return _trie_cache
+    trie = build_trie(lexicon)
+    _trie_cache = trie
+    _trie_words_hash = h
+    return trie
 
 
 def _norm(tok: str) -> str:
@@ -166,6 +182,18 @@ def decompose(token: str, lexicon: frozenset[str], max_edits: int = 2, fixups: d
     memo = _decompose_memo.get(cache_key)
     if memo is not None:
         return memo
+    # Primary path: Trie segmentation O(L)
+    try:
+        trie = get_trie(lexicon)
+        trie_parts = trie_segment(cleaned, trie)
+        if trie_parts is not None:
+            memo = (trie_parts, True)
+            if len(_decompose_memo) >= _DECOMPOSE_MEMO_MAX:
+                _decompose_memo.clear()
+            _decompose_memo[cache_key] = memo
+            return memo
+    except Exception:
+        pass
     parts = _known_split(cleaned, lexicon)
     memo = (parts, True) if parts is not None else ([raw], False)
     if len(_decompose_memo) >= _DECOMPOSE_MEMO_MAX:
