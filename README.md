@@ -12,7 +12,7 @@ rollback if anything fails.
 ## Workflow
 
 1. **Select assets** in the Asset Browser (browse_mode == ASSETS), then press the
-   large **Run BATM — Analyze, Review & Apply Tags** button.
+   large **Run BATM** button.
    > *What it does:* fingerprints every `.blend`, runs the AutoTag engine on deep
    > facts (object types, rig/bones, modifiers, materials, poly count, animation,
    > UVs, collection hierarchy, library/catalog), proposes tags, then opens an
