@@ -24,32 +24,17 @@ rollback if anything fails.
 3. **Confirm and Apply** creates a verified, checksummed backup and runs worker
    processes to write the tags. Every written asset is re-read and verified.
 4. **Diagnostics & Logs** shows summaries, event log and allows restoring the
-   latest backup. `Sponsored by b-water Studios Animation` is shown in the
-   footer of the main panel and in Add-on Preferences.
-
-## AutoTag — Deterministic, Zero Hallucination
-
-- **Trie-based segmentation** (`engine/segmenter.py`): O(L) compound splitting
-  via prefix tree — `rosarojavioleta` → `rosa` + `roja` + `violeta` (and combined).
-- **Lemma-Dict** (`engine/lemma.py` + `resources/lemma_map.json`): exact
-  dictionary lemmatization replaces Porter Stemmer — no more `procedural→procedur`.
-- **Mutex Fauna / Domain Resolution** (`engine/taxonomy.py`): if Fauna wins,
-  Human tags are suppressed; `child`→`cub`, `old prop`→`weathered` (not `elder`).
-- **Corpus 5000+ tokens** across 15 domains + 26 knowledge groups + curated
-  `compound_splits.json` (~100+ entries) and `segmenter_lexicon.json` (~500+).
-- **Rules** are deterministic, versioned (schema 1), priority-sorted, with
-  stem/lemma fallback only as last resort.
-- **Catalog Sync** bidireccional with `blender_assets.cats.txt`.
-
+   latest backup.
+   
 ## Modes
 
 - **AutoTag**: deterministic rules (`docs/AUTOTAG_RULES.md`) over
   facts extracted without opening .blend files (only `assets_only` reads).
-- **Knowledge dictionary**: bundled category Tags matched by words from names
+- **Knowledge custom dictionary**: bundled category Tags matched by words from names
   and materials (`resources/autotag_knowledge.json`).
 - **Manual Tag Editor**: unified Tag list for the current selection with
   Add / Remove / Replace queued as operations reviewed before applying.
-  Filter by name (`tag_search`) and by character count (`tag_length_filter`).
+  Filter tags by name (`tag_search`) and by character count (`tag_length_filter`) on preview and manual tag editor.
 - **Sanitizer**: casing, separators, blacklist, max Tag length (63), synonym
   merging, compound recombine (`BOTH`/`SPLIT`/`RECOMBINED`) and a hard per-asset cap.
 
