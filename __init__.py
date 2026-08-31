@@ -48,11 +48,24 @@ CLASSES = PROPERTY_CLASSES + OPERATOR_CLASSES + PANEL_CLASSES
 
 def register() -> None:
     for cls in CLASSES:
-        bpy.utils.register_class(cls)
+        try:
+            bpy.utils.register_class(cls)
+        except ValueError:
+            # F8 reload: class already registered — unregister first then retry
+            try:
+                bpy.utils.unregister_class(cls)
+            except Exception:
+                pass
+            bpy.utils.register_class(cls)
     bpy.types.WindowManager.batm_runtime = bpy.props.PointerProperty(type=BATMRuntimeProperties)
     ensure_dirs()
     SESSION.rules = load_active_rules()
-    SESSION.phase = "IDLE"
+    # Use the validated state transition when possible; fall back to a hard
+    # reset on reload where the previous phase may be non-IDLE.
+    try:
+        SESSION.set_phase("IDLE")
+    except Exception:
+        SESSION.reset()
     backups = recoverable_backups()
     if backups:
         SESSION.add_message(
@@ -71,4 +84,8 @@ def unregister() -> None:
     if hasattr(bpy.types.WindowManager, "batm_runtime"):
         del bpy.types.WindowManager.batm_runtime
     for cls in reversed(CLASSES):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except Exception:
+            pass
+    SESSION.reset()

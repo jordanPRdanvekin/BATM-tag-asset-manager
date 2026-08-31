@@ -5,7 +5,7 @@ from __future__ import annotations
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 
-ADDON_ID = __package__.rsplit(".", 1)[0]
+ADDON_ID = "batch_asset_tag_manager"
 
 
 class BATMPreferences(bpy.types.AddonPreferences):
@@ -65,7 +65,7 @@ class BATMPreferences(bpy.types.AddonPreferences):
         # Sponsored header — always visible, non-invasive
         header = layout.box()
         header.label(text="Sponsored by b-water Studios Animation", icon="FUND")
-        header.operator("wm.url_open", text="b-water.com", icon="URL").url = "https://b-water.com"
+        header.operator("wm.url_open", text="b-waterstudios.com", icon="URL").url = "https://b-waterstudios.com"
         layout.prop(self, "max_workers")
         layout.prop(self, "worker_timeout_seconds")
         layout.prop(self, "review_page_size")

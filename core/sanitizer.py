@@ -245,9 +245,11 @@ def sanitize_tags(values: str | Iterable[str], options: dict | None = None) -> t
                         #     (e.g. oaktree -> "oak tree").
                         # The combined form is appended as plain text (never fed
                         # back into decomposition), so it cannot be re-segmented.
-                        # Fix for rosarojavioleta: ensure BOTH emits spaced Title Case
-                        # "Rosa Roja Violeta" plus atomics, even though fixups preserves.
-                        if tok.casefold() == "rosarojavioleta":
+                        # Curated fixups are preservation markers (e.g. promesh ->
+                        # promesh) unless the split yields 3+ components — in that
+                        # case the spaced Title Case form is the correct combined
+                        # unit (rosarojavioleta -> "Rosa Roja Violeta").
+                        if tok.casefold() in fixups and len(words) > 2:
                             combined = " ".join(words)
                         else:
                             combined = tok if tok.casefold() in fixups else " ".join(words)
@@ -311,11 +313,11 @@ def sanitize_tags(values: str | Iterable[str], options: dict | None = None) -> t
     if recombine == "RECOMBINED" and separators == "DOUBLE_HYPHEN":
         cleaned = [item for item in cleaned if item not in individual]
 
-    if max_tags > 0:
-        cleaned = cleaned[:max_tags]
-
     if sort_result:
         cleaned.sort(key=lambda item: item.casefold())
+
+    if max_tags > 0:
+        cleaned = cleaned[:max_tags]
     return cleaned, errors
 
 

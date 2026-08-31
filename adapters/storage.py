@@ -19,7 +19,21 @@ from .. import __package__ as base_package
 def base_dir() -> Path:
     override = os.environ.get("BATM_BASE_DIR")
     if override:
-        return Path(override)
+        candidate = Path(override).expanduser()
+        # Resolve without requiring the path to exist yet; fall back to raw path
+        # if resolution fails (e.g. non-existent parent).
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        # BATM_BASE_DIR is test-controlled; reject obvious traversal payloads
+        # like ``../../etc`` that would escape the intended sandbox. The check
+        # is intentionally permissive for absolute temp dirs used in tests.
+        if ".." in Path(override).parts:
+            # ``Path.resolve()`` already collapses ``..``; still guard the raw
+            # string so ``BATM_BASE_DIR=../../tmp`` cannot be injected via env.
+            raise ValueError(f"BATM_BASE_DIR must not contain '..': {override!r}")
+        return resolved
     path = bpy.utils.extension_path_user(base_package, path="", create=True)
     return Path(path)
 

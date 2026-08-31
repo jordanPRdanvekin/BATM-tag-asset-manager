@@ -297,7 +297,7 @@
     {
       "rule_id": "builtin-biome-path",
       "name": "Biome by path / collection",
-      "match_field": "library_path",
+      "match_field": "path_tokens",
       "match_values": [
         "cyberpunk",
         "medieval",

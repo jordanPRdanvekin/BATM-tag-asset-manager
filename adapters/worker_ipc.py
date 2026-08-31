@@ -20,20 +20,31 @@ def worker_script_path() -> Path:
 def prepare_request(
     run_id: str, index: int, payload: dict[str, Any], timeout_seconds: float | None = None
 ) -> dict[str, Any]:
-    run_dir = ensure_dirs()["runs"] / run_id
+    # ``run_id`` is internally generated via uuid4; validate to prevent
+    # directory traversal if a caller ever forwards external input.
+    if not run_id or ".." in run_id or "/" in run_id or "\\" in run_id:
+        raise ValueError(f"Invalid run_id: {run_id!r}")
+    # ``payload`` must not override IPC framing keys.
+    for key in ("schema_version", "run_id", "status_path", "result_path", "cancel_path"):
+        if key in payload:
+            raise ValueError(f"Payload must not contain reserved key: {key!r}")
+    base_runs = ensure_dirs()["runs"].resolve()
+    run_dir = (base_runs / run_id).resolve()
+    if not run_dir.is_relative_to(base_runs):
+        raise ValueError(f"run_id escapes runs dir: {run_id!r}")
     run_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{index:05d}"
     request_path = run_dir / f"request_{stem}.json"
     status_path = run_dir / f"status_{stem}.json"
     result_path = run_dir / f"result_{stem}.json"
     cancel_path = run_dir / "cancel.requested"
-    request = {
+    request: dict[str, Any] = {
+        **payload,
         "schema_version": IPC_SCHEMA_VERSION,
         "run_id": run_id,
         "status_path": str(status_path),
         "result_path": str(result_path),
         "cancel_path": str(cancel_path),
-        **payload,
     }
     if timeout_seconds is not None:
         request["timeout_seconds"] = float(timeout_seconds)

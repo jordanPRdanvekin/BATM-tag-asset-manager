@@ -28,8 +28,11 @@ def _current_catalog_label(context) -> str:
 
 
 def _metrics_row(box, label: str, value: str, icon: str = "NONE") -> None:
-    """Draw a single label/value row in the metrics table."""
-    row = box.split(factor=0.5, align=False)
+    """Draw a single label/value row in the metrics table.
+
+    Uses a plain row (not split) so it nests safely inside grid_flow.
+    """
+    row = box.row(align=True)
     row.label(text=label, icon=icon)
     row.label(text=value)
 

@@ -28,10 +28,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["BATM_tag_asset_manager"]
+known-first-party = ["BATM_tag_asset_manager", "batch_asset_tag_manager"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["../tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
