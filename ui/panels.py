@@ -29,7 +29,7 @@ def _current_catalog_label(context) -> str:
 
 def _metrics_row(box, label: str, value: str, icon: str = "NONE") -> None:
     """Draw a single label/value row in the metrics table."""
-    row = box.split(factor=0.6, align=False)
+    row = box.split(factor=0.5, align=False)
     row.label(text=label, icon=icon)
     row.label(text=value)
 
@@ -41,19 +41,20 @@ def _draw_metrics(layout, context) -> None:
         return
     library_label = active_library_label(context)
     # The library name is information, not a disclosure control.
-    row = box.row()
-    row.label(text=library_label, icon="ASSET_MANAGER")
+    box.label(text=library_label, icon="ASSET_MANAGER")
+    # Use grid_flow for adaptive metrics layout (wraps on narrow panels).
+    grid = box.grid_flow(columns=0, even_columns=False, align=True)
     library_count = INVENTORY.count_for_reference(library_label)
     if library_count is not None:
-        _metrics_row(box, "Assets", f"{library_count:,}", "ASSET_MANAGER")
+        _metrics_row(grid, "Assets", f"{library_count:,}", "ASSET_MANAGER")
     elif INVENTORY.libraries:
-        _metrics_row(box, "Assets", "not counted (Essentials/online)", "INFO")
+        _metrics_row(grid, "Assets", "not counted (Essentials/online)", "INFO")
     else:
-        _metrics_row(box, "Assets", INVENTORY.status, "INFO")
-    _metrics_row(box, "Selected", f"{len(selected_assets(context)):,}", "RESTRICT_SELECT_OFF")
+        _metrics_row(grid, "Assets", INVENTORY.status, "INFO")
+    _metrics_row(grid, "Selected", f"{len(selected_assets(context)):,}", "RESTRICT_SELECT_OFF")
     catalog = _current_catalog_label(context)
     if catalog:
-        _metrics_row(box, "Catalog", catalog, "FILTER")
+        _metrics_row(grid, "Catalog", catalog, "FILTER")
     if "Scanning" in INVENTORY.status:
         box.label(text=INVENTORY.status, icon="TIME")
 
@@ -101,13 +102,16 @@ def _draw_manual(layout, context) -> None:
     if not _collapsible_header(box, props, "manual_expanded", "Manual Tag Editor"):
         return
 
-    # Search by name + filter by nº characters (both respect pagination).
-    row = box.row(align=True)
-    row.prop(props, "tag_search", text="", icon="VIEWZOOM")
-    row.label(text="Filter by name", icon="SORTALPHA")
-    row = box.row(align=True)
-    row.prop(props, "tag_length_filter", text="Nº chars")
-    row.label(text="Filter by character count (0 = all)", icon="FONT_DATA")
+    # Search by name + filter by character count (adaptive layout).
+    # Use grid_flow for wrapping on narrow panels.
+    search_grid = box.grid_flow(columns=0, even_columns=False, align=True)
+    search_row = search_grid.row(align=True)
+    search_row.prop(props, "tag_search", text="", icon="VIEWZOOM")
+    search_row.label(text="Filter by name", icon="SORTALPHA")
+    
+    filter_row = search_grid.row(align=True)
+    filter_row.prop(props, "tag_length_filter", text="Chars")
+    filter_row.label(text="(0=all)", icon="FONT_DATA")
 
     # Tag list with multi-select (manual search + exact character-length filter).
     total, frequency = selected_tag_frequency(context)
@@ -133,18 +137,24 @@ def _draw_manual(layout, context) -> None:
         toggle.tag_name = name
         row.label(text=name)
         row.label(text=f"{count}/{total}")
-    # Page navigation: first / previous / next / last.
-    nav = box.row(align=True)
-    nav.operator("batm.manual_tag_page", text="", icon="REW").action = "FIRST"
-    nav.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").action = "PREV"
-    nav.label(text=f"Page {page + 1} / {page_count} — {len(filtered)} Tags")
-    nav.operator("batm.manual_tag_page", text="", icon="TRIA_RIGHT").action = "NEXT"
-    nav.operator("batm.manual_tag_page", text="", icon="FF").action = "LAST"
+    # Page navigation: adaptive layout using grid_flow for wrapping.
+    nav_grid = box.grid_flow(columns=0, even_columns=False, align=True)
+    nav_left = nav_grid.row(align=True)
+    nav_left.operator("batm.manual_tag_page", text="", icon="REW").action = "FIRST"
+    nav_left.operator("batm.manual_tag_page", text="", icon="TRIA_LEFT").action = "PREV"
+    
+    nav_center = nav_grid.row()
+    nav_center.label(text=f"Page {page + 1} / {page_count} ({len(filtered)} Tags)")
+    
+    nav_right = nav_grid.row(align=True)
+    nav_right.operator("batm.manual_tag_page", text="", icon="TRIA_RIGHT").action = "NEXT"
+    nav_right.operator("batm.manual_tag_page", text="", icon="FF").action = "LAST"
+    
     size_row = box.row(align=True)
-    size_row.label(text="Tags per page")
+    size_row.label(text="Tags per page:")
     size_row.prop(props, "manual_page_size", text="", expand=True)
 
-    # Select All / Clear Selection.
+    # Select All / Clear Selection (compact row).
     select_row = box.row(align=True)
     select_row.operator("batm.manual_select_all", text="Select All", icon="CHECKBOX_HLT")
     select_row.operator("batm.manual_clear_selection", text="Clear", icon="X")
@@ -157,21 +167,21 @@ def _draw_manual(layout, context) -> None:
 
     action = props.manual_action
     if action == "ADD":
-        row = box.row(align=True)
-        row.prop(props, "manual_add", text="New Tags")
-        row.operator("batm.manual_add", text="Add", icon="ADD")
+        add_row = box.row(align=True)
+        add_row.prop(props, "manual_add", text="")
+        add_row.operator("batm.manual_add", text="Add", icon="ADD")
     elif action == "REMOVE":
         selected_count = len(SESSION.selected_tags)
-        box.label(text=f"Tags selected: {selected_count}")
+        box.label(text=f"Selected: {selected_count}", icon="CHECKBOX_HLT")
         remove_row = box.row(align=True)
         remove_row.enabled = selected_count > 0
         remove_row.operator("batm.manual_remove", text="Remove Selected", icon="REMOVE")
     elif action == "REPLACE":
         selected_count = len(SESSION.selected_tags)
-        box.label(text=f"Tags selected to replace: {selected_count}", icon="CHECKBOX_HLT")
+        box.label(text=f"Selected: {selected_count}", icon="CHECKBOX_HLT")
         repl = box.row(align=True)
         repl.enabled = selected_count > 0
-        repl.prop(props, "replace_destination", text="Replace selected with")
+        repl.prop(props, "replace_destination", text="With")
         box.operator("batm.manual_replace", text="Replace Selected", icon="FILE_REFRESH")
 
     box.separator()
@@ -380,25 +390,19 @@ def _draw_settings(layout, context) -> None:
 
 def _draw_run(layout, props) -> None:
     """RUN BATM — always visible, wide, large and never collapsible."""
-    layout.scale_y = 3.0
+    # Main action button with increased height for prominence.
+    layout.scale_y = 2.5
     layout.operator(
         "batm.run",
-        text="Run BATM  —  Analyze, Review & Apply Tags",
+        text="Run BATM — Analyze, Review & Apply Tags",
         icon="PLAY",
     )
     layout.scale_y = 1.0
-    layout.label(
-        text="Scans selected assets, proposes tags (AutoTag), then Review before writing.",
-        icon="INFO",
-    )
+    # Tooltip-style info line (moved from permanent text to reduce clutter).
     if props.last_summary:
         layout.label(text=props.last_summary, icon="CHECKMARK")
     if props.status:
         layout.label(text=props.status)
-    # Sponsored footer — minimal, non-invasive
-    row = layout.row()
-    row.alignment = "CENTER"
-    row.label(text="Sponsored by b-water Studios Animation", icon="FUND")
 
 
 class BATM_PT_main(bpy.types.Panel):

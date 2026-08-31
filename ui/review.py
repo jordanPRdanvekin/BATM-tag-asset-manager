@@ -76,13 +76,16 @@ def _step_added(layout, context, props, states):
         length=props.tag_length_filter,
     )
     box = layout.box()
-    # Filters: by name (substring) + by nº characters (exact, alnum only).
-    filter_row = box.row(align=True)
-    filter_row.prop(props, "review_add_search", text="", icon="VIEWZOOM")
-    filter_row.label(text="By name", icon="SORTALPHA")
-    filter_row = box.row(align=True)
-    filter_row.prop(props, "tag_length_filter", text="Nº chars")
-    filter_row.label(text="By character count (0 = all)", icon="FONT_DATA")
+    # Filters: adaptive layout using grid_flow for narrow panels.
+    filter_grid = box.grid_flow(columns=0, even_columns=False, align=True)
+    frow1 = filter_grid.row(align=True)
+    frow1.prop(props, "review_add_search", text="", icon="VIEWZOOM")
+    frow1.label(text="By name", icon="SORTALPHA")
+    
+    frow2 = filter_grid.row(align=True)
+    frow2.prop(props, "tag_length_filter", text="Chars")
+    frow2.label(text="(0=all)", icon="FONT_DATA")
+    
     box.label(text=f"Add · {len(agg)} unique Tags", icon="ADD")
     if not agg:
         box.label(text="No additions proposed", icon="INFO")
@@ -104,15 +107,21 @@ def _step_added(layout, context, props, states):
         edit.force = True
         remove = row.operator("batm.review_remove_added", text="", icon="X")
         remove.value = display
-    # Page navigation: first / previous / next / last.
-    nav = box.row(align=True)
-    nav.operator("batm.review_add_page", text="", icon="REW").action = "FIRST"
-    nav.operator("batm.review_add_page", text="", icon="TRIA_LEFT").action = "PREV"
-    nav.label(text=f"Page {page + 1} / {page_count}")
-    nav.operator("batm.review_add_page", text="", icon="TRIA_RIGHT").action = "NEXT"
-    nav.operator("batm.review_add_page", text="", icon="FF").action = "LAST"
+    # Page navigation: adaptive layout with grid_flow.
+    nav_grid = box.grid_flow(columns=0, even_columns=False, align=True)
+    nav_left = nav_grid.row(align=True)
+    nav_left.operator("batm.review_add_page", text="", icon="REW").action = "FIRST"
+    nav_left.operator("batm.review_add_page", text="", icon="TRIA_LEFT").action = "PREV"
+    
+    nav_center = nav_grid.row()
+    nav_center.label(text=f"Page {page + 1} / {page_count}")
+    
+    nav_right = nav_grid.row(align=True)
+    nav_right.operator("batm.review_add_page", text="", icon="TRIA_RIGHT").action = "NEXT"
+    nav_right.operator("batm.review_add_page", text="", icon="FF").action = "LAST"
+    
     size_row = box.row(align=True)
-    size_row.label(text="Tags per page")
+    size_row.label(text="Tags per page:")
     size_row.prop(props, "review_add_page_size", text="", expand=True)
 
 
@@ -159,9 +168,13 @@ def _step_assets(layout, context, props, states):
         length=props.tag_length_filter,
     )
     preview = layout.box()
-    filter_row = preview.row(align=True)
-    filter_row.prop(props, "review_add_search", text="", icon="VIEWZOOM")
-    filter_row.prop(props, "tag_length_filter", text="Length")
+    # Adaptive filter row using grid_flow.
+    filter_grid = preview.grid_flow(columns=0, even_columns=False, align=True)
+    frow1 = filter_grid.row(align=True)
+    frow1.prop(props, "review_add_search", text="", icon="VIEWZOOM")
+    frow2 = filter_grid.row(align=True)
+    frow2.prop(props, "tag_length_filter", text="Length")
+    
     head = preview.row(align=True)
     head.label(text=f"Final Tags · {len(final)} unique", icon="CHECKMARK")
     head.label(text=f"over {len(states)} assets")
@@ -176,14 +189,21 @@ def _step_assets(layout, context, props, states):
             row = preview.row(align=True)
             row.label(text=display)
             row.label(text=f"{count}/{len(states)}")
-        nav = preview.row(align=True)
-        nav.operator("batm.review_final_page", text="", icon="REW").action = "FIRST"
-        nav.operator("batm.review_final_page", text="", icon="TRIA_LEFT").action = "PREV"
-        nav.label(text=f"Page {page + 1} / {page_count}")
-        nav.operator("batm.review_final_page", text="", icon="TRIA_RIGHT").action = "NEXT"
-        nav.operator("batm.review_final_page", text="", icon="FF").action = "LAST"
+        # Adaptive navigation with grid_flow.
+        nav_grid = preview.grid_flow(columns=0, even_columns=False, align=True)
+        nav_left = nav_grid.row(align=True)
+        nav_left.operator("batm.review_final_page", text="", icon="REW").action = "FIRST"
+        nav_left.operator("batm.review_final_page", text="", icon="TRIA_LEFT").action = "PREV"
+        
+        nav_center = nav_grid.row()
+        nav_center.label(text=f"Page {page + 1} / {page_count}")
+        
+        nav_right = nav_grid.row(align=True)
+        nav_right.operator("batm.review_final_page", text="", icon="TRIA_RIGHT").action = "NEXT"
+        nav_right.operator("batm.review_final_page", text="", icon="FF").action = "LAST"
+        
         size_row = preview.row(align=True)
-        size_row.label(text="Tags per page")
+        size_row.label(text="Tags per page:")
         size_row.prop(props, "review_add_page_size", text="", expand=True)
     box = layout.box()
     box.label(text="Per-asset fine-tune", icon="OBJECT_DATA")
