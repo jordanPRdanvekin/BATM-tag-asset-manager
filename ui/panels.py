@@ -52,9 +52,6 @@ def _draw_metrics(layout, context) -> None:
     else:
         _metrics_row(grid, "Assets", INVENTORY.status, "INFO")
     _metrics_row(grid, "Selected", f"{len(selected_assets(context)):,}", "RESTRICT_SELECT_OFF")
-    catalog = _current_catalog_label(context)
-    if catalog:
-        _metrics_row(grid, "Catalog", catalog, "FILTER")
     if "Scanning" in INVENTORY.status:
         box.label(text=INVENTORY.status, icon="TIME")
 
@@ -394,7 +391,7 @@ def _draw_run(layout, props) -> None:
     layout.scale_y = 2.5
     layout.operator(
         "batm.run",
-        text="Run BATM — Analyze, Review & Apply Tags",
+        text="Run BATM",
         icon="PLAY",
     )
     layout.scale_y = 1.0
