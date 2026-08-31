@@ -56,5 +56,4 @@ rollback if anything fails.
 
 ## Sponsors
 
-BATM was developed during an internship by a student of **B-Water Studios** and is proudly sponsored by them.  
 https://b-waterstudios.com/
