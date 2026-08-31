@@ -1,25 +1,23 @@
-# Python bytecode
-__pycache__/
-*.py[cod]
-*.pyo
+```gitignore
+# Compiled and build artifacts
 *.pyc
+__pycache__/
 
-# Distribution / build artifacts
-dist/
-*.zip
+# Dependencies
+.venv/
+venv/
 
-# Development / testing artifacts
-.batm_test/
-tests/
-docs/
-audit/
-tools/
-
-# OS / IDE files
-.DS_Store
-Thumbs.db
+# Logs and temp files
+*.log
+*.tmp
 *.swp
-*.swo
-*~
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
 .vscode/
 .idea/
+```

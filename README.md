@@ -1,8 +1,9 @@
-# BATM tag asset manager
+# BATM — Batch Asset Tag Manager
 
-> **Sponsored by b-water Animation Studios** 
+> **BATM was developed during an internship by a student of B-Water Studios and is sponsored by B-Water Studios.**  
+> https://b-waterstudios.com/
 
-BATM (Batch Asset Tag Manager) is a Blender 5.2+ extension for managing Asset
+BATM (Batch Asset Tag Manager) is a Blender 5.2 LTS extension for managing Asset
 Browser tags at library scale. It analyzes selected assets in background
 Blender workers, proposes Tag changes through an editable Review, backs up
 every change, and applies them with fingerprint verification — with automatic
@@ -55,4 +56,5 @@ rollback if anything fails.
 
 ## Sponsors
 
-BATM is proudly **sponsored by b-water Animation** https://b-waterstudios.com
+BATM was developed during an internship by a student of **B-Water Studios** and is proudly sponsored by them.  
+https://b-waterstudios.com/
