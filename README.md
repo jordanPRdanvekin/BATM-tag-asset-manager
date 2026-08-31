@@ -60,23 +60,13 @@ rollback if anything fails.
 - Applying verifies fingerprints before and after each file write.
 - Cancel mid-execution rolls back every file already written and verifies.
 
-## Configuration (add-on preferences)
+## Configuration (add-on preferences (advanced))
 
 - `Max Workers`: 1–4 parallel background processes.
 - `Worker Timeout`: seconds per request before a worker is killed.
 - `Review Page Size`, `Log Retention Days / Runs`.
 - `Catalog level` (Concepts / Full) + `Cross-Tagging`.
 
-## Development
-
-Run the offline test-suite without Blender:
-
-```
-pytest tests/ -v
-```
-
-All tests are pytest-compatible plain asserts so they run in CI without
-external dependencies. See `docs/` for rules and knowledge schemas.
 
 ## Sponsors
 
