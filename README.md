@@ -1,6 +1,6 @@
 # BATM tag asset manager
 
-> **Sponsored by b-water Studios Animation** — [b-water.com](https://b-waterstudios.com/)
+> **Sponsored by b-water Animation Studios** 
 
 BATM (Batch Asset Tag Manager) is a Blender 5.2+ extension for managing Asset
 Browser tags at library scale. It analyzes selected assets in background
